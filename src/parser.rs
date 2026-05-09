@@ -235,10 +235,25 @@ impl<'a> Parser<'a> {
                 self.expect(TokenKind::Comma)?;
                 let steps = self.expect_u32()?;
                 self.expect(TokenKind::RParen)?;
+                let rotate = if self.check(TokenKind::Dot) {
+                    self.advance();
+                    self.expect_ident("rotate")?;
+                    self.expect(TokenKind::LParen)?;
+                    let steps = self.expect_i32()?;
+                    self.expect(TokenKind::RParen)?;
+                    Some(steps)
+                } else {
+                    None
+                };
+                let body = if let Some(rotate) = rotate {
+                    format!("euclid({pulses}, {steps}).rotate({rotate})")
+                } else {
+                    format!("euclid({pulses}, {steps})")
+                };
                 return Ok(Spell {
                     name,
                     kind: PatternKind::Rhythm,
-                    body: format!("euclid({pulses}, {steps})"),
+                    body,
                     span,
                 });
             }
@@ -461,6 +476,14 @@ impl<'a> Parser<'a> {
             bail!("{}: expected unsigned integer", self.previous_span());
         }
         Ok(number as u32)
+    }
+
+    fn expect_i32(&mut self) -> Result<i32> {
+        let number = self.expect_number()?;
+        if number.fract() != 0.0 {
+            bail!("{}: expected integer", self.previous_span());
+        }
+        Ok(number as i32)
     }
 
     fn check(&self, expected: TokenKind) -> bool {

@@ -149,7 +149,7 @@ Defer stochastic transforms until random stream identity is settled:
 ### Euclidean Rhythms
 
 * Implement `euclid(pulses, steps)`. Done.
-* Implement `.rotate(steps)` for Euclidean patterns.
+* Implement `.rotate(steps)` for Euclidean patterns. Done.
 * Add tests for edge cases: zero pulses, full pulses, invalid step counts. Done.
 
 ### Probability And Humanization

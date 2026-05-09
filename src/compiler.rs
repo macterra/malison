@@ -308,8 +308,10 @@ fn expand_notes(
 }
 
 fn rhythm_steps(body: &str) -> Result<Vec<Option<f64>>> {
-    if let Some((pulses, step_count)) = parse_euclid(body)? {
-        return euclid_steps(pulses, step_count);
+    if let Some((pulses, step_count, rotate)) = parse_euclid(body)? {
+        let mut steps = euclid_steps(pulses, step_count)?;
+        rotate_steps(&mut steps, rotate);
+        return Ok(steps);
     }
 
     let mut steps = Vec::new();
@@ -329,19 +331,33 @@ fn rhythm_steps(body: &str) -> Result<Vec<Option<f64>>> {
     Ok(steps)
 }
 
-fn parse_euclid(body: &str) -> Result<Option<(u32, u32)>> {
-    let Some(args) = body
-        .strip_prefix("euclid(")
-        .and_then(|value| value.strip_suffix(')'))
-    else {
+fn parse_euclid(body: &str) -> Result<Option<(u32, u32, i32)>> {
+    let Some(rest) = body.strip_prefix("euclid(") else {
         return Ok(None);
     };
+    let Some((args, transform)) = rest.split_once(')') else {
+        bail!("euclid rhythm must use `euclid(pulses, steps)`");
+    };
+    if !transform.is_empty() && !transform.starts_with(".rotate(") {
+        bail!("unsupported euclid transform `{transform}`");
+    }
     let Some((pulses, steps)) = args.split_once(',') else {
         bail!("euclid rhythm must use `euclid(pulses, steps)`");
+    };
+    let rotate = if transform.is_empty() {
+        0
+    } else {
+        transform
+            .strip_prefix(".rotate(")
+            .and_then(|value| value.strip_suffix(')'))
+            .ok_or_else(|| anyhow::anyhow!("euclid rotate must use `.rotate(steps)`"))?
+            .trim()
+            .parse()?
     };
     Ok(Some((
         pulses.trim().parse()?,
         steps.trim().parse()?,
+        rotate,
     )))
 }
 
@@ -363,6 +379,15 @@ fn euclid_steps(pulses: u32, step_count: u32) -> Result<Vec<Option<f64>>> {
         })
         .collect::<Vec<_>>();
     Ok(steps)
+}
+
+fn rotate_steps<T>(steps: &mut [T], rotate: i32) {
+    if steps.is_empty() {
+        return;
+    }
+    let len = steps.len() as i32;
+    let amount = rotate.rem_euclid(len) as usize;
+    steps.rotate_right(amount);
 }
 
 fn note_steps(body: &str) -> Result<Vec<Option<String>>> {
@@ -738,6 +763,47 @@ working "Euclid Test" {
             .map(|event| event.time_beats)
             .collect::<Vec<_>>();
         assert_eq!(times, vec![0.0, 0.75, 1.5, 2.0, 2.75, 3.5]);
+
+        fs::remove_dir_all(&root).unwrap();
+    }
+
+    #[test]
+    fn rotates_euclidean_rhythm_spells() {
+        let root =
+            std::env::temp_dir().join(format!("malison-euclid-rotate-test-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        fs::create_dir_all(root.join("samples")).unwrap();
+        fs::write(root.join("samples/kick.wav"), b"not really wav").unwrap();
+
+        let source = r#"
+language 0.1
+
+working "Euclid Rotate Test" {
+  tempo 120
+  meter 4/4
+  seed "seed"
+
+  daemon kick = sample "samples/kick.wav"
+  spell hits = euclid(3, 8).rotate(2)
+
+  rite main bars 1 {
+    invoke kick with hits every 1/16
+  }
+
+  evoke wav "renders/test.wav"
+}
+"#;
+        let path = root.join("main.rite");
+        fs::write(&path, source).unwrap();
+        let working = parse_source(&path, source).unwrap();
+        let compiled = compile_events(&path, &root, working).unwrap();
+        let times = compiled
+            .ir
+            .events
+            .iter()
+            .map(|event| event.time_beats)
+            .collect::<Vec<_>>();
+        assert_eq!(times, vec![0.0, 0.5, 1.25, 2.0, 2.5, 3.25]);
 
         fs::remove_dir_all(&root).unwrap();
     }

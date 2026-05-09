@@ -13,6 +13,7 @@ pub enum TokenKind {
     LParen,
     RParen,
     Comma,
+    Dot,
     Slash,
     Equal,
 }
@@ -81,6 +82,7 @@ impl Lexer {
                 '(' => self.push_single(TokenKind::LParen),
                 ')' => self.push_single(TokenKind::RParen),
                 ',' => self.push_single(TokenKind::Comma),
+                '.' => self.push_single(TokenKind::Dot),
                 '/' => self.push_single(TokenKind::Slash),
                 '=' => self.push_single(TokenKind::Equal),
                 '"' => self.lex_string()?,
