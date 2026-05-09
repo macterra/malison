@@ -44,3 +44,5 @@ cargo run -- render examples/first-working/main.rite --backend supercollider --f
 ```bash
 cargo test
 ```
+
+The current JSON IR contract is documented in [docs/IR_SCHEMA.md](docs/IR_SCHEMA.md).

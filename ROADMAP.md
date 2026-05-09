@@ -115,7 +115,7 @@ Purpose: make IR a durable contract between the frontend, renderers, tests, and 
 
 ### Exit Criteria
 
-* The IR JSON shape is documented and tested.
+* The IR JSON shape is documented and tested. Done.
 * `events` and `ir` have stable snapshot coverage.
 * Event source mapping explains why each sound exists.
 
