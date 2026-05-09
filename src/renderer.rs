@@ -30,6 +30,7 @@ pub struct BackendCapability {
 pub fn backend_capabilities() -> BackendCapabilities {
     let daemon_kinds = vec![
         "sample",
+        "samplekit",
         "saw_sub",
         "drone",
         "noise_burst",
@@ -110,7 +111,9 @@ pub fn render_wav(
             .get(event.daemon.as_str())
             .ok_or_else(|| anyhow::anyhow!("event references unknown daemon `{}`", event.daemon))?;
         match daemon.kind.as_str() {
-            "sample" => render_sample(compiled, daemon, event, sample_rate, &mut buffer)?,
+            "sample" | "samplekit" => {
+                render_sample(compiled, daemon, event, sample_rate, &mut buffer)?
+            }
             "saw_sub" => render_saw_sub(event, &compiled.ir.tempo_bpm, sample_rate, &mut buffer),
             "drone" => render_drone(event, &compiled.ir.tempo_bpm, sample_rate, &mut buffer),
             "noise_burst" => {
@@ -210,8 +213,16 @@ pub fn supercollider_script(
     let mut next_bufnum = 0;
     for daemon in &compiled.ir.daemons {
         if daemon.kind == "sample" {
-            sample_buffers.insert(daemon.id.as_str(), next_bufnum);
+            sample_buffers.insert(daemon.id.as_str(), vec![next_bufnum]);
             next_bufnum += 1;
+        } else if daemon.kind == "samplekit" {
+            let sample_dir = daemon.sample.as_deref().ok_or_else(|| {
+                anyhow::anyhow!("samplekit daemon `{}` has no samplekit path", daemon.id)
+            })?;
+            let samples = samplekit_samples(compiled, sample_dir)?;
+            let bufnums = (next_bufnum..next_bufnum + samples.len() as i32).collect::<Vec<_>>();
+            next_bufnum += samples.len() as i32;
+            sample_buffers.insert(daemon.id.as_str(), bufnums);
         }
     }
 
@@ -230,12 +241,24 @@ pub fn supercollider_script(
                 anyhow::anyhow!("sample daemon `{}` has no sample path", daemon.id)
             })?;
             let path = resolve_sample_path(compiled, sample_path);
-            let bufnum = sample_buffers[daemon.id.as_str()];
+            let bufnum = sample_buffers[daemon.id.as_str()][0];
             score_lines.push(format!(
                 "[0.0, [\\b_allocRead, {}, {}]]",
                 bufnum,
                 sc_string(&path.display().to_string())
             ));
+        } else if daemon.kind == "samplekit" {
+            let sample_dir = daemon.sample.as_deref().ok_or_else(|| {
+                anyhow::anyhow!("samplekit daemon `{}` has no samplekit path", daemon.id)
+            })?;
+            let paths = samplekit_samples(compiled, sample_dir)?;
+            for (bufnum, path) in sample_buffers[daemon.id.as_str()].iter().zip(paths) {
+                score_lines.push(format!(
+                    "[0.0, [\\b_allocRead, {}, {}]]",
+                    bufnum,
+                    sc_string(&path.display().to_string())
+                ));
+            }
         }
     }
 
@@ -249,7 +272,7 @@ pub fn supercollider_script(
             .ok_or_else(|| anyhow::anyhow!("event references unknown daemon `{}`", event.daemon))?;
         let time = beats_to_seconds(event.time_beats, compiled.ir.tempo_bpm);
         match daemon.kind.as_str() {
-            "sample" => {
+            "sample" | "samplekit" => {
                 let amp =
                     db_to_amp(param_f64(&event.params, "gain_db").unwrap_or(0.0)) * event.velocity;
                 let pan = param_f64(&event.params, "pan")
@@ -267,11 +290,9 @@ pub fn supercollider_script(
                 } else {
                     0
                 };
-                let bufnum = sample_buffers[event.daemon.as_str()];
-                let sample_path = daemon.sample.as_deref().ok_or_else(|| {
-                    anyhow::anyhow!("sample daemon `{}` has no sample path", daemon.id)
-                })?;
-                let sample_info = wav_info(&resolve_sample_path(compiled, sample_path))?;
+                let (bufnum, path) =
+                    sc_sample_buffer_for_event(compiled, daemon, event, &sample_buffers)?;
+                let sample_info = wav_info(&path)?;
                 let start_seconds = param_f64(&event.params, "start_seconds").unwrap_or(0.0);
                 let end_seconds = param_f64(&event.params, "end_seconds")
                     .unwrap_or(sample_info.frames as f64 / sample_info.sample_rate as f64);
@@ -426,11 +447,7 @@ fn render_sample(
     sample_rate: u32,
     buffer: &mut [[f32; 2]],
 ) -> Result<()> {
-    let sample_path = daemon
-        .sample
-        .as_deref()
-        .ok_or_else(|| anyhow::anyhow!("sample daemon `{}` has no sample path", daemon.id))?;
-    let path = resolve_sample_path(compiled, sample_path);
+    let path = sample_path_for_event(compiled, daemon, event)?;
     let sample = read_wav(&path, sample_rate)?;
     let mut sample = slice_sample(&sample, event, sample_rate);
     if event
@@ -700,6 +717,78 @@ fn read_wav(path: &Path, expected_sample_rate: u32) -> Result<Vec<[f32; 2]>> {
         frames.push([left, right]);
     }
     Ok(frames)
+}
+
+fn sample_path_for_event(
+    compiled: &CompiledWorking,
+    daemon: &IrDaemon,
+    event: &IrEvent,
+) -> Result<std::path::PathBuf> {
+    let sample_path = daemon
+        .sample
+        .as_deref()
+        .ok_or_else(|| anyhow::anyhow!("sample daemon `{}` has no sample path", daemon.id))?;
+    if daemon.kind == "samplekit" {
+        let samples = samplekit_samples(compiled, sample_path)?;
+        let index = stable_index(&event.semantic_path, samples.len());
+        Ok(samples[index].clone())
+    } else {
+        Ok(resolve_sample_path(compiled, sample_path))
+    }
+}
+
+fn samplekit_samples(
+    compiled: &CompiledWorking,
+    sample_dir: &str,
+) -> Result<Vec<std::path::PathBuf>> {
+    let dir = resolve_sample_path(compiled, sample_dir);
+    let mut paths = fs::read_dir(&dir)
+        .with_context(|| format!("failed to read `{}`", dir.display()))?
+        .filter_map(|entry| entry.ok().map(|entry| entry.path()))
+        .filter(|path| path.extension().and_then(|ext| ext.to_str()) == Some("wav"))
+        .collect::<Vec<_>>();
+    paths.sort();
+    if paths.is_empty() {
+        bail!(
+            "samplekit directory `{}` contains no .wav files",
+            dir.display()
+        );
+    }
+    Ok(paths)
+}
+
+fn sc_sample_buffer_for_event(
+    compiled: &CompiledWorking,
+    daemon: &IrDaemon,
+    event: &IrEvent,
+    buffers: &BTreeMap<&str, Vec<i32>>,
+) -> Result<(i32, std::path::PathBuf)> {
+    let sample_path = daemon
+        .sample
+        .as_deref()
+        .ok_or_else(|| anyhow::anyhow!("sample daemon `{}` has no sample path", daemon.id))?;
+    if daemon.kind == "samplekit" {
+        let samples = samplekit_samples(compiled, sample_path)?;
+        let index = stable_index(&event.semantic_path, samples.len());
+        Ok((
+            buffers[event.daemon.as_str()][index],
+            samples[index].clone(),
+        ))
+    } else {
+        Ok((
+            buffers[event.daemon.as_str()][0],
+            resolve_sample_path(compiled, sample_path),
+        ))
+    }
+}
+
+fn stable_index(value: &str, len: usize) -> usize {
+    let mut hash = 0xcbf29ce484222325_u64;
+    for byte in value.as_bytes() {
+        hash ^= *byte as u64;
+        hash = hash.wrapping_mul(0x100000001b3);
+    }
+    (hash as usize) % len
 }
 
 fn resolve_sample_path(compiled: &CompiledWorking, sample_path: &str) -> std::path::PathBuf {
@@ -1123,6 +1212,59 @@ working "Archetype Test" {
 
         let reader = hound::WavReader::open(out).unwrap();
         assert_eq!(reader.spec().channels, 2);
+
+        fs::remove_dir_all(&root).unwrap();
+    }
+
+    #[test]
+    fn renders_samplekit_with_deterministic_sample_selection() {
+        let root =
+            std::env::temp_dir().join(format!("malison-samplekit-test-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        fs::create_dir_all(root.join("samples/kit")).unwrap();
+        fs::write(
+            root.join("malison.toml"),
+            "[project]\nname = \"samplekit-test\"\n",
+        )
+        .unwrap();
+        write_test_kick(&root.join("samples/kit/a.wav"));
+        write_test_kick(&root.join("samples/kit/b.wav"));
+
+        let source = r#"
+language 0.1
+
+working "Samplekit Test" {
+  tempo 120
+  meter 4/4
+  seed "seed"
+
+  daemon hats = samplekit "kit" { gain -6 }
+  spell hits = pattern "xxxx"
+
+  rite main bars 1 {
+    invoke hats with hits every 1/16
+  }
+
+  evoke wav "renders/test.wav"
+}
+"#;
+        let path = root.join("main.rite");
+        fs::write(&path, source).unwrap();
+        let working = parse_source(&path, source).unwrap();
+        let project_root = project_root_for(&path).unwrap();
+        let compiled = compile_events(
+            &path,
+            &project_root,
+            &crate::compiler::ProjectConfig::default(),
+            working,
+        )
+        .unwrap();
+        assert_eq!(compiled.ir.daemons[0].kind, "samplekit");
+        let out = root.join("renders/test.wav");
+        render_wav(&compiled, &out, 48_000, 24).unwrap();
+        let script = supercollider_script(&compiled, &out, 48_000, 24).unwrap();
+        assert!(script.contains("kit/a.wav"));
+        assert!(script.contains("kit/b.wav"));
 
         fs::remove_dir_all(&root).unwrap();
     }

@@ -14,6 +14,7 @@ malison capabilities
 Both backends currently support:
 
 * `sample`
+* `samplekit`
 * `saw_sub`
 * `drone`
 * `noise_burst`
@@ -27,6 +28,7 @@ Supported sample features:
 * `start_seconds`
 * `end_seconds`
 * explicit sample normalization with `normalize on`
+* deterministic sample selection from a `samplekit` directory
 
 Supported pattern features:
 

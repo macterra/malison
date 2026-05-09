@@ -19,6 +19,7 @@ Supported declarations:
 
 * `circle name -> parent { ward limiter ceiling -1 }`
 * `daemon name = sample "path.wav" { ... }`
+* `daemon name = samplekit "folder" { ... }`
 * `daemon name = saw_sub { ... }`
 * `daemon name = drone { ... }`
 * `daemon name = noise_burst { ... }`
@@ -44,7 +45,7 @@ Supported rite statements:
 
 Common daemon parameters:
 
-* Samples: `gain`, `pan`, `tune`, `start`, `end`, `normalize on|off`
+* Samples and sample kits: `gain`, `pan`, `tune`, `start`, `end`, `normalize on|off`
 * `saw_sub`: `gain`, `pan`, `cutoff`, `drive`, `attack`, `decay`, `sustain`, `release`, `detune`, `sub`, `resonance`
 
 Supported pattern transforms:

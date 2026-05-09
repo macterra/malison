@@ -214,7 +214,7 @@ Purpose: make the sonic palette worth composing with.
 * Add better errors for unsupported sample formats. Done through explicit WAV validation and contextual reader errors.
 * Add sample start/end offsets. Done for Rust and represented in SC score generation.
 * Add sample amplitude normalization only if explicitly requested. Done with `normalize on`.
-* Add sample kits after individual sample playback is solid.
+* Add sample kits after individual sample playback is solid. Done with deterministic selection from sorted `.wav` files.
 
 ### Built-In Synths
 

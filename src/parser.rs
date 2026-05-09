@@ -46,6 +46,7 @@ pub struct Daemon {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum DaemonKind {
     Sample,
+    SampleKit,
     SawSub,
     Drone,
     NoiseBurst,
@@ -270,6 +271,7 @@ impl<'a> Parser<'a> {
         let kind_name = self.expect_ident_any()?;
         let kind = match kind_name.as_str() {
             "sample" => DaemonKind::Sample,
+            "samplekit" => DaemonKind::SampleKit,
             "saw_sub" => DaemonKind::SawSub,
             "drone" => DaemonKind::Drone,
             "noise_burst" => DaemonKind::NoiseBurst,
@@ -277,7 +279,7 @@ impl<'a> Parser<'a> {
             "metal_hit" => DaemonKind::MetalHit,
             _ => bail!("{}: unsupported daemon kind `{kind_name}`", self.location()),
         };
-        let sample_path = if kind == DaemonKind::Sample {
+        let sample_path = if matches!(kind, DaemonKind::Sample | DaemonKind::SampleKit) {
             Some(self.expect_string()?)
         } else {
             None
@@ -817,6 +819,7 @@ fn is_reserved_word(value: &str) -> bool {
             | "circle"
             | "daemon"
             | "sample"
+            | "samplekit"
             | "saw_sub"
             | "spell"
             | "pattern"

@@ -100,6 +100,12 @@ pub fn compile_events(
             })?;
             validate_sample_path(project_root, config, sample)?;
         }
+        if daemon.kind == DaemonKind::SampleKit {
+            let sample_dir = daemon.sample_path.as_deref().ok_or_else(|| {
+                anyhow::anyhow!("samplekit daemon `{}` is missing a path", daemon.name)
+            })?;
+            validate_samplekit_path(project_root, config, sample_dir)?;
+        }
         validate_params(&daemon.name, daemon.kind.clone(), &daemon.params)?;
     }
 
@@ -222,7 +228,10 @@ pub fn compile_events(
                     })?;
                     match (&daemon.kind, &spell.kind) {
                         (
-                            DaemonKind::Sample | DaemonKind::NoiseBurst | DaemonKind::MetalHit,
+                            DaemonKind::Sample
+                            | DaemonKind::SampleKit
+                            | DaemonKind::NoiseBurst
+                            | DaemonKind::MetalHit,
                             PatternKind::Rhythm,
                         ) => {
                             let context = ExpansionContext::new(
@@ -259,6 +268,7 @@ pub fn compile_events(
                         semantic_path,
                         kind: match daemon.kind {
                             DaemonKind::Sample => "trigger".to_string(),
+                            DaemonKind::SampleKit => "trigger".to_string(),
                             DaemonKind::SawSub => "note".to_string(),
                             DaemonKind::Drone | DaemonKind::Swarm => "continuous".to_string(),
                             DaemonKind::NoiseBurst | DaemonKind::MetalHit => "trigger".to_string(),
@@ -313,6 +323,7 @@ pub fn compile_events(
                 id: daemon.name.clone(),
                 kind: match daemon.kind {
                     DaemonKind::Sample => "sample".to_string(),
+                    DaemonKind::SampleKit => "samplekit".to_string(),
                     DaemonKind::SawSub => "saw_sub".to_string(),
                     DaemonKind::Drone => "drone".to_string(),
                     DaemonKind::NoiseBurst => "noise_burst".to_string(),
@@ -437,6 +448,7 @@ fn validate_invokes(
                 if !matches!(
                     (&daemon.kind, &spell.kind),
                     (DaemonKind::Sample, PatternKind::Rhythm)
+                        | (DaemonKind::SampleKit, PatternKind::Rhythm)
                         | (DaemonKind::NoiseBurst, PatternKind::Rhythm)
                         | (DaemonKind::MetalHit, PatternKind::Rhythm)
                         | (DaemonKind::SawSub, PatternKind::Notes)
@@ -1092,6 +1104,37 @@ fn validate_sample_path(project_root: &Path, config: &ProjectConfig, sample: &st
     Ok(())
 }
 
+fn validate_samplekit_path(
+    project_root: &Path,
+    config: &ProjectConfig,
+    sample_dir: &str,
+) -> Result<()> {
+    if sample_dir.starts_with('~') || sample_dir.contains('*') || sample_dir.contains("://") {
+        bail!("samplekit path `{sample_dir}` is not valid in language 0.1");
+    }
+    let direct_path = project_root.join(sample_dir);
+    let manifest_path = project_root.join(&config.sample_dir).join(sample_dir);
+    let path = if direct_path.exists() {
+        direct_path
+    } else {
+        manifest_path
+    };
+    if !path.is_dir() {
+        bail!("samplekit directory `{}` does not exist", path.display());
+    }
+    let has_wav = fs::read_dir(&path)
+        .with_context(|| format!("failed to read `{}`", path.display()))?
+        .filter_map(|entry| entry.ok())
+        .any(|entry| entry.path().extension().and_then(|ext| ext.to_str()) == Some("wav"));
+    if !has_wav {
+        bail!(
+            "samplekit directory `{}` contains no .wav files",
+            path.display()
+        );
+    }
+    Ok(())
+}
+
 pub fn validate_output_path(out_path: &Path) -> Result<()> {
     if let Some(parent) = out_path
         .parent()
@@ -1120,7 +1163,7 @@ fn validate_working_header(working: &Working) -> Result<()> {
 fn validate_params(owner: &str, kind: DaemonKind, params: &[crate::parser::Param]) -> Result<()> {
     for param in params {
         let allowed = match kind {
-            DaemonKind::Sample => matches!(
+            DaemonKind::Sample | DaemonKind::SampleKit => matches!(
                 param.name.as_str(),
                 "gain"
                     | "pan"
