@@ -302,6 +302,23 @@ working "Include Test" {
         .arg(root.path().join("main.rite"))
         .assert()
         .success();
+
+    let output = Command::cargo_bin("malison")
+        .unwrap()
+        .arg("ir")
+        .arg(root.path().join("main.rite"))
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let json: serde_json::Value = serde_json::from_slice(&output).unwrap();
+    assert!(
+        json["daemons"][0]["source"]["file"]
+            .as_str()
+            .unwrap()
+            .ends_with("drums.rite")
+    );
 }
 
 #[test]

@@ -13,7 +13,7 @@ use std::process::ExitCode;
 
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
-use compiler::{ProjectConfig, compile_events, project_root_for};
+use compiler::{ProjectConfig, SourceLine, compile_events_with_source_map, project_root_for};
 use manifest::load_manifest;
 use parser::parse_source;
 use serde::Serialize;
@@ -423,9 +423,9 @@ fn load_and_compile(path: &Path) -> Result<compiler::CompiledWorking> {
     }
     let raw_source =
         fs::read_to_string(path).with_context(|| format!("failed to read `{}`", path.display()))?;
-    let source = expand_includes(path, &raw_source, &mut HashSet::new())?;
-    let working =
-        parse_source(path, &source).map_err(|error| with_source_snippet(path, &source, error))?;
+    let expanded = expand_includes(path, &raw_source, &mut HashSet::new())?;
+    let working = parse_source(path, &expanded.source)
+        .map_err(|error| with_source_snippet(path, &expanded.source, error))?;
     let project_root = project_root_for(path)?;
     let manifest = load_manifest(&project_root)?;
     let config = ProjectConfig {
@@ -433,15 +433,25 @@ fn load_and_compile(path: &Path) -> Result<compiler::CompiledWorking> {
         render_dir: manifest.paths.renders.clone(),
         build_dir: manifest.paths.build.clone(),
     };
-    let mut compiled = compile_events(path, &project_root, &config, working)
-        .map_err(|error| with_source_snippet(path, &source, error))?;
+    let mut compiled =
+        compile_events_with_source_map(path, Some(&expanded.map), &project_root, &config, working)
+            .map_err(|error| with_source_snippet(path, &expanded.source, error))?;
     compiled.render_backend = manifest.render.backend;
     compiled.sample_rate = manifest.render.sample_rate;
     compiled.bit_depth = manifest.render.bit_depth;
     Ok(compiled)
 }
 
-fn expand_includes(path: &Path, source: &str, seen: &mut HashSet<PathBuf>) -> Result<String> {
+struct ExpandedSource {
+    source: String,
+    map: Vec<SourceLine>,
+}
+
+fn expand_includes(
+    path: &Path,
+    source: &str,
+    seen: &mut HashSet<PathBuf>,
+) -> Result<ExpandedSource> {
     let canonical = fs::canonicalize(path)
         .with_context(|| format!("failed to canonicalize `{}`", path.display()))?;
     if !seen.insert(canonical.clone()) {
@@ -449,7 +459,8 @@ fn expand_includes(path: &Path, source: &str, seen: &mut HashSet<PathBuf>) -> Re
     }
     let base = path.parent().unwrap_or_else(|| Path::new("."));
     let mut expanded = String::new();
-    for line in source.lines() {
+    let mut map = Vec::new();
+    for (line_index, line) in source.lines().enumerate() {
         if let Some(include) = parse_include_line(line) {
             let include_path = base.join(include);
             if include_path.extension().and_then(|ext| ext.to_str()) != Some("rite") {
@@ -460,15 +471,28 @@ fn expand_includes(path: &Path, source: &str, seen: &mut HashSet<PathBuf>) -> Re
             }
             let include_source = fs::read_to_string(&include_path)
                 .with_context(|| format!("failed to read `{}`", include_path.display()))?;
-            expanded.push_str(&expand_includes(&include_path, &include_source, seen)?);
+            let include = expand_includes(&include_path, &include_source, seen)?;
+            expanded.push_str(&include.source);
+            map.extend(include.map);
             expanded.push('\n');
+            map.push(SourceLine {
+                file: include_path.clone(),
+                line: include_source.lines().count().saturating_add(1),
+            });
         } else {
             expanded.push_str(line);
             expanded.push('\n');
+            map.push(SourceLine {
+                file: path.to_path_buf(),
+                line: line_index + 1,
+            });
         }
     }
     seen.remove(&canonical);
-    Ok(expanded)
+    Ok(ExpandedSource {
+        source: expanded,
+        map,
+    })
 }
 
 fn parse_include_line(line: &str) -> Option<&str> {

@@ -355,8 +355,8 @@ Purpose: make Malison usable across more than one file and more than one sample 
 
 * Add imports or includes. Done with `include "file.rite"` fragments.
 * Decide whether each file may define declarations or only libraries. Done; includes are source fragments that may define declarations or rites inside the parent working.
-* Preserve source maps across files. Pending richer parser source-map plumbing; included text currently compiles deterministically through the parent source.
-* Add semantic paths that include module/import context. Pending richer parser source-map plumbing.
+* Preserve source maps across files. Done for IR source locations from included fragments.
+* Add semantic paths that include module/import context. Deferred; semantic event identity remains arrangement-based so moving a declaration into an include does not perturb event IDs.
 
 ### Libraries
 

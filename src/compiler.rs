@@ -33,6 +33,12 @@ pub struct ProjectConfig {
     pub build_dir: PathBuf,
 }
 
+#[derive(Clone, Debug)]
+pub struct SourceLine {
+    pub file: PathBuf,
+    pub line: usize,
+}
+
 impl Default for ProjectConfig {
     fn default() -> Self {
         Self {
@@ -60,8 +66,19 @@ pub fn project_root_for(input: &Path) -> Result<PathBuf> {
     }
 }
 
+#[cfg(test)]
 pub fn compile_events(
     input: &Path,
+    project_root: &Path,
+    config: &ProjectConfig,
+    working: Working,
+) -> Result<CompiledWorking> {
+    compile_events_with_source_map(input, None, project_root, config, working)
+}
+
+pub fn compile_events_with_source_map(
+    input: &Path,
+    source_map: Option<&[SourceLine]>,
     project_root: &Path,
     config: &ProjectConfig,
     working: Working,
@@ -152,7 +169,7 @@ pub fn compile_events(
             start_beats: rite_start,
             duration_beats,
             layer: rite.layer,
-            source: source_for_span(input, rite.span),
+            source: source_for_span(input, source_map, rite.span),
         });
 
         for (automation_index, automation) in rite.automations.iter().enumerate() {
@@ -172,7 +189,7 @@ pub fn compile_events(
                 duration_beats,
                 from,
                 to,
-                source: source_for_span(input, automation.span),
+                source: source_for_span(input, source_map, automation.span),
             });
         }
 
@@ -202,7 +219,7 @@ pub fn compile_events(
                 duration_beats,
                 from: binding.from,
                 to: binding.to,
-                source_location: source_for_span(input, binding.span),
+                source_location: source_for_span(input, source_map, binding.span),
             });
         }
 
@@ -230,7 +247,7 @@ pub fn compile_events(
                 velocity: 0.0,
                 pitch: None,
                 params: BTreeMap::new(),
-                source: source_for_span(input, banish.span),
+                source: source_for_span(input, source_map, banish.span),
                 source_order: banish.source_order,
             });
         }
@@ -267,6 +284,7 @@ pub fn compile_events(
                         ) => {
                             let context = ExpansionContext::new(
                                 input,
+                                source_map,
                                 &rite.name,
                                 &working.seed,
                                 rite_start,
@@ -277,6 +295,7 @@ pub fn compile_events(
                         (DaemonKind::SawSub | DaemonKind::Swarm, PatternKind::Notes) => {
                             let context = ExpansionContext::new(
                                 input,
+                                source_map,
                                 &rite.name,
                                 &working.seed,
                                 rite_start,
@@ -317,7 +336,7 @@ pub fn compile_events(
                         velocity: 1.0,
                         pitch: root_pitch(&params)?,
                         params,
-                        source: source_for(input, invoke),
+                        source: source_for(input, source_map, invoke),
                         source_order: invoke.source_order,
                     });
                 }
@@ -336,7 +355,7 @@ pub fn compile_events(
     apply_control_bindings_to_events(&mut events, &control_events, &control_bindings);
 
     let random_streams = random_streams_for(&working);
-    let circles = ir_circles(input, &working);
+    let circles = ir_circles(input, source_map, &working);
     let evoke_wav = working.evoke_wav;
     let ir = Ir {
         ir_version: "0.1".to_string(),
@@ -364,7 +383,7 @@ pub fn compile_events(
                 },
                 sample: daemon.sample_path.clone(),
                 params: merged_params(&daemon.params, &[]),
-                source: source_for_span(input, daemon.span),
+                source: source_for_span(input, source_map, daemon.span),
             })
             .collect(),
         spells: working
@@ -382,7 +401,7 @@ pub fn compile_events(
                     .iter()
                     .map(pattern_transform_label)
                     .collect(),
-                source: source_for_span(input, spell.span),
+                source: source_for_span(input, source_map, spell.span),
             })
             .collect(),
         rites,
@@ -390,7 +409,7 @@ pub fn compile_events(
             id: "wav".to_string(),
             kind: "wav".to_string(),
             path: evoke_wav.clone(),
-            source: source_for_span(input, working.evoke_span),
+            source: source_for_span(input, source_map, working.evoke_span),
         }],
         control_events,
         control_bindings,
@@ -548,13 +567,13 @@ fn validate_circles(working: &Working) -> Result<()> {
     Ok(())
 }
 
-fn ir_circles(input: &Path, working: &Working) -> Vec<IrCircle> {
+fn ir_circles(input: &Path, source_map: Option<&[SourceLine]>, working: &Working) -> Vec<IrCircle> {
     let mut circles = vec![IrCircle {
         id: "master".to_string(),
         parent: None,
         effects: Vec::new(),
         wards: Vec::new(),
-        source: source_for_span(input, working.evoke_span),
+        source: source_for_span(input, source_map, working.evoke_span),
     }];
     circles.extend(working.circles.iter().map(|circle| {
         IrCircle {
@@ -566,7 +585,7 @@ fn ir_circles(input: &Path, working: &Working) -> Vec<IrCircle> {
                 .map(|effect| IrEffect {
                     kind: effect.kind.clone(),
                     params: merged_params(&effect.params, &[]),
-                    source: source_for_span(input, effect.span),
+                    source: source_for_span(input, source_map, effect.span),
                 })
                 .collect(),
             wards: circle
@@ -576,10 +595,10 @@ fn ir_circles(input: &Path, working: &Working) -> Vec<IrCircle> {
                     kind: ward.kind.clone(),
                     param: ward.param.clone(),
                     value: ward.value,
-                    source: source_for_span(input, ward.span),
+                    source: source_for_span(input, source_map, ward.span),
                 })
                 .collect(),
-            source: source_for_span(input, circle.span),
+            source: source_for_span(input, source_map, circle.span),
         }
     }));
     circles
@@ -816,6 +835,7 @@ fn truncate_continuous_events(events: &mut [IrEvent], daemon: &str, banish_time:
 
 struct ExpansionContext<'a> {
     input: &'a Path,
+    source_map: Option<&'a [SourceLine]>,
     rite_name: &'a str,
     seed: &'a str,
     rite_start: f64,
@@ -825,6 +845,7 @@ struct ExpansionContext<'a> {
 impl<'a> ExpansionContext<'a> {
     fn new(
         input: &'a Path,
+        source_map: Option<&'a [SourceLine]>,
         rite_name: &'a str,
         seed: &'a str,
         rite_start: f64,
@@ -832,6 +853,7 @@ impl<'a> ExpansionContext<'a> {
     ) -> Self {
         Self {
             input,
+            source_map,
             rite_name,
             seed,
             rite_start,
@@ -892,7 +914,7 @@ fn expand_rhythm(
                 velocity,
                 pitch: None,
                 params: params.clone(),
-                source: source_for(context.input, invoke),
+                source: source_for(context.input, context.source_map, invoke),
                 source_order: invoke.source_order,
             });
         }
@@ -961,7 +983,7 @@ fn expand_notes(
                     midi: pitch_to_midi(pitch_name)?,
                 }),
                 params: params.clone(),
-                source: source_for(context.input, invoke),
+                source: source_for(context.input, context.source_map, invoke),
                 source_order: invoke.source_order,
             });
         }
@@ -1549,11 +1571,28 @@ fn value_to_json(value: &Value) -> serde_json::Value {
     }
 }
 
-fn source_for(input: &Path, invoke: &crate::parser::Invoke) -> IrSource {
-    source_for_span(input, invoke.span)
+fn source_for(
+    input: &Path,
+    source_map: Option<&[SourceLine]>,
+    invoke: &crate::parser::Invoke,
+) -> IrSource {
+    source_for_span(input, source_map, invoke.span)
 }
 
-fn source_for_span(input: &Path, span: crate::lexer::Span) -> IrSource {
+fn source_for_span(
+    input: &Path,
+    source_map: Option<&[SourceLine]>,
+    span: crate::lexer::Span,
+) -> IrSource {
+    if let Some(mapped) =
+        source_map.and_then(|source_map| source_map.get(span.line.saturating_sub(1)))
+    {
+        return IrSource {
+            file: mapped.file.display().to_string(),
+            line: mapped.line,
+            column: span.column,
+        };
+    }
     IrSource {
         file: input.display().to_string(),
         line: span.line,
