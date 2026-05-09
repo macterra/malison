@@ -30,6 +30,7 @@ pub struct Daemon {
 pub enum DaemonKind {
     Sample,
     SawSub,
+    Drone,
 }
 
 #[derive(Clone, Debug)]
@@ -215,6 +216,7 @@ impl<'a> Parser<'a> {
         let kind = match kind_name.as_str() {
             "sample" => DaemonKind::Sample,
             "saw_sub" => DaemonKind::SawSub,
+            "drone" => DaemonKind::Drone,
             _ => bail!("{}: unsupported daemon kind `{kind_name}`", self.location()),
         };
         let sample_path = if kind == DaemonKind::Sample {

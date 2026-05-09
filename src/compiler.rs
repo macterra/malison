@@ -179,12 +179,17 @@ pub fn compile_events(
                         kind: match daemon.kind {
                             DaemonKind::Sample => "trigger".to_string(),
                             DaemonKind::SawSub => "note".to_string(),
+                            DaemonKind::Drone => "continuous".to_string(),
                         },
                         time_beats: rite_start,
-                        duration_beats: invoke.every.map(|duration| duration.beats).unwrap_or(0.25),
+                        duration_beats: if daemon.kind == DaemonKind::Drone {
+                            duration_beats
+                        } else {
+                            invoke.every.map(|duration| duration.beats).unwrap_or(0.25)
+                        },
                         daemon: invoke.daemon.clone(),
                         velocity: 1.0,
-                        pitch: None,
+                        pitch: root_pitch(&params)?,
                         params,
                         source: source_for(input, invoke),
                         source_order: invoke.source_order,
@@ -222,6 +227,7 @@ pub fn compile_events(
                 kind: match daemon.kind {
                     DaemonKind::Sample => "sample".to_string(),
                     DaemonKind::SawSub => "saw_sub".to_string(),
+                    DaemonKind::Drone => "drone".to_string(),
                 },
                 sample: daemon.sample_path.clone(),
                 params: merged_params(&daemon.params, &[]),
@@ -848,6 +854,9 @@ fn validate_params(owner: &str, kind: DaemonKind, params: &[crate::parser::Param
             DaemonKind::SawSub => {
                 matches!(param.name.as_str(), "gain" | "pan" | "cutoff" | "drive")
             }
+            DaemonKind::Drone => {
+                matches!(param.name.as_str(), "gain" | "pan" | "cutoff" | "drive" | "root")
+            }
         };
         if !allowed {
             bail!("`{}` does not support parameter `{}`", owner, param.name);
@@ -858,6 +867,12 @@ fn validate_params(owner: &str, kind: DaemonKind, params: &[crate::parser::Param
 }
 
 fn validate_param_value(owner: &str, name: &str, value: &Value) -> Result<()> {
+    if name == "root" {
+        if matches!(value, Value::Pitch(_)) {
+            return Ok(());
+        }
+        bail!("`{owner}` parameter `root` must be a pitch");
+    }
     let number = match value {
         Value::Number(number) => *number,
         _ => bail!("`{owner}` parameter `{name}` must be numeric"),
@@ -875,6 +890,16 @@ fn validate_param_value(owner: &str, name: &str, value: &Value) -> Result<()> {
         _ => {}
     }
     Ok(())
+}
+
+fn root_pitch(params: &BTreeMap<String, serde_json::Value>) -> Result<Option<IrPitch>> {
+    let Some(root) = params.get("root").and_then(|value| value.as_str()) else {
+        return Ok(None);
+    };
+    Ok(Some(IrPitch {
+        name: root.to_string(),
+        midi: pitch_to_midi(root)?,
+    }))
 }
 
 fn merged_params(
@@ -1326,6 +1351,41 @@ working "Arrangement Test" {
         let working = parse_source(&path, &overlapping).unwrap();
         let error = compile_events(&path, &root, working).unwrap_err().to_string();
         assert!(error.contains("overlaps rite `intro`"));
+
+        fs::remove_dir_all(&root).unwrap();
+    }
+
+    #[test]
+    fn lowers_drone_invocations_to_continuous_events() {
+        let root = std::env::temp_dir().join(format!("malison-drone-test-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        fs::create_dir_all(root.join("samples")).unwrap();
+        fs::write(root.join("samples/kick.wav"), b"not really wav").unwrap();
+
+        let source = r#"
+language 0.1
+
+working "Drone Test" {
+  tempo 120
+  meter 4/4
+  seed "seed"
+
+  daemon bed = drone { root F1 gain -18 cutoff 700 drive 0.2 }
+
+  rite main bars 2 {
+    invoke bed
+  }
+
+  evoke wav "renders/test.wav"
+}
+"#;
+        let path = root.join("main.rite");
+        fs::write(&path, source).unwrap();
+        let working = parse_source(&path, source).unwrap();
+        let compiled = compile_events(&path, &root, working).unwrap();
+        assert_eq!(compiled.ir.events[0].kind, "continuous");
+        assert_eq!(compiled.ir.events[0].duration_beats, 8.0);
+        assert_eq!(compiled.ir.events[0].pitch.as_ref().unwrap().name, "F1");
 
         fs::remove_dir_all(&root).unwrap();
     }

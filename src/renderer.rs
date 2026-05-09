@@ -41,6 +41,7 @@ pub fn render_wav(
         match daemon.kind.as_str() {
             "sample" => render_sample(compiled, daemon, event, sample_rate, &mut buffer)?,
             "saw_sub" => render_saw_sub(event, &compiled.ir.tempo_bpm, sample_rate, &mut buffer),
+            "drone" => render_drone(event, &compiled.ir.tempo_bpm, sample_rate, &mut buffer),
             other => bail!("unsupported daemon kind `{other}`"),
         }
     }
@@ -127,6 +128,7 @@ pub fn supercollider_script(
     let mut score_lines = Vec::new();
     score_lines.push("[0.0, [\\d_recv, SynthDef(\\mal_sample, { |out=0, bufnum=0, amp=1, pan=0, rate=1| var sig; sig = PlayBuf.ar(1, bufnum, BufRateScale.kr(bufnum) * rate, doneAction:2); Out.ar(out, Pan2.ar(sig * amp, pan)); }).asBytes]]".to_string());
     score_lines.push("[0.0, [\\d_recv, SynthDef(\\mal_saw_sub, { |out=0, freq=55, dur=0.25, amp=0.3, pan=0, cutoff=1200, drive=0| var hold, env, sig, driven; hold = (dur - 0.19).max(0.001); env = EnvGen.kr(Env([0, 1, 0.65, 0.65, 0], [0.01, 0.18, hold, 0.08]), doneAction:2); sig = (Saw.ar(freq) * 0.72) + (Saw.ar(freq * 0.5) * 0.28); sig = RLPF.ar(sig, cutoff.clip(20, 20000), 0.35); driven = (sig * (1 + (drive * 12))).tanh; Out.ar(out, Pan2.ar(driven * env * amp, pan)); }).asBytes]]".to_string());
+    score_lines.push("[0.0, [\\d_recv, SynthDef(\\mal_drone, { |out=0, freq=43.65, dur=4, amp=0.18, pan=0, cutoff=900, drive=0| var env, sig, driven; env = EnvGen.kr(Env([0, 1, 1, 0], [0.5, (dur - 1).max(0.1), 0.5]), doneAction:2); sig = (SinOsc.ar(freq) * 0.55) + (Saw.ar(freq * 0.5) * 0.25) + (SinOsc.ar(freq * 1.5) * 0.2); sig = RLPF.ar(sig, cutoff.clip(20, 20000), 0.2); driven = (sig * (1 + (drive * 8))).tanh; Out.ar(out, Pan2.ar(driven * env * amp, pan)); }).asBytes]]".to_string());
 
     for daemon in &compiled.ir.daemons {
         if daemon.kind == "sample" {
@@ -182,6 +184,27 @@ pub fn supercollider_script(
                     ));
                     node_id += 1;
                 }
+            }
+            "drone" => {
+                let freq = event
+                    .pitch
+                    .as_ref()
+                    .map(|pitch| midi_to_freq(pitch.midi))
+                    .unwrap_or_else(|| midi_to_freq(29));
+                let dur = beats_to_seconds(event.duration_beats, compiled.ir.tempo_bpm);
+                let amp =
+                    db_to_amp(param_f64(&event.params, "gain_db").unwrap_or(-14.0)) * event.velocity;
+                let pan = param_f64(&event.params, "pan")
+                    .unwrap_or(0.0)
+                    .clamp(-1.0, 1.0);
+                let cutoff = param_f64(&event.params, "cutoff_hz").unwrap_or(900.0);
+                let drive = param_f64(&event.params, "drive")
+                    .unwrap_or(0.0)
+                    .clamp(0.0, 1.0);
+                score_lines.push(format!(
+                    "[{time:.6}, [\\s_new, \\mal_drone, {node_id}, 0, 1, \\freq, {freq:.8}, \\dur, {dur:.8}, \\amp, {amp:.8}, \\pan, {pan:.8}, \\cutoff, {cutoff:.8}, \\drive, {drive:.8}]]"
+                ));
+                node_id += 1;
             }
             other => bail!("unsupported daemon kind `{other}`"),
         }
@@ -266,6 +289,47 @@ fn render_saw_sub(event: &IrEvent, tempo_bpm: &f64, sample_rate: u32, buffer: &m
         let mut value = (saw * 0.72 + sub * 0.28) * env;
         if drive > 0.0 {
             let amount = 1.0 + drive * 12.0;
+            value = (value * amount).tanh() / amount.tanh();
+        }
+        value = lowpass.process(value) * gain;
+        frames_out.push([value, value]);
+    }
+
+    mix_frames(buffer, start, &frames_out, 1.0, pan);
+}
+
+fn render_drone(event: &IrEvent, tempo_bpm: &f64, sample_rate: u32, buffer: &mut [[f32; 2]]) {
+    let start = seconds_to_frame(beats_to_seconds(event.time_beats, *tempo_bpm), sample_rate);
+    let note_seconds = beats_to_seconds(event.duration_beats, *tempo_bpm);
+    let frames = ((note_seconds + 0.5) * sample_rate as f64).ceil() as usize;
+    let midi = event.pitch.as_ref().map(|pitch| pitch.midi).unwrap_or(29);
+    let freq = 440.0_f32 * 2.0_f32.powf((midi as f32 - 69.0) / 12.0);
+    let gain =
+        (db_to_amp(param_f64(&event.params, "gain_db").unwrap_or(-14.0)) * event.velocity) as f32;
+    let pan = param_f64(&event.params, "pan").unwrap_or(0.0) as f32;
+    let drive = param_f64(&event.params, "drive")
+        .unwrap_or(0.0)
+        .clamp(0.0, 1.0) as f32;
+    let cutoff = param_f64(&event.params, "cutoff_hz").unwrap_or(900.0) as f32;
+    let mut lowpass = OnePoleLowpass::new(cutoff, sample_rate as f32);
+    let mut frames_out = Vec::with_capacity(frames);
+
+    for frame in 0..frames {
+        let t = frame as f32 / sample_rate as f32;
+        let fade = 0.5_f32.min(note_seconds as f32 * 0.5);
+        let attack = if fade > 0.0 { (t / fade).min(1.0) } else { 1.0 };
+        let release = if fade > 0.0 {
+            ((note_seconds as f32 - t) / fade).clamp(0.0, 1.0)
+        } else {
+            1.0
+        };
+        let env = attack.min(release);
+        let sine = (2.0 * PI * freq * t).sin() * 0.55;
+        let sub = (2.0 * PI * freq * 0.5 * t).sin() * 0.3;
+        let overtone = (2.0 * PI * freq * 1.5 * t).sin() * 0.15;
+        let mut value = (sine + sub + overtone) * env;
+        if drive > 0.0 {
+            let amount = 1.0 + drive * 8.0;
             value = (value * amount).tanh() / amount.tanh();
         }
         value = lowpass.process(value) * gain;

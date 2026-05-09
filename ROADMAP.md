@@ -183,9 +183,9 @@ Purpose: move beyond one repeating section while keeping the model inspectable.
 
 ### Invocation Lifecycle
 
-* Define whether invocations are event streams, one-shot events, or persistent processes.
+* Define whether invocations are event streams, one-shot events, or persistent processes. Done: pattern invocations are event streams, no-pattern sample/synth invocations are one-shots, and no-pattern drone invocations are persistent continuous events.
 * Implement `banish` only after lifecycle semantics are explicit.
-* Add continuous drone behavior through a clear event kind.
+* Add continuous drone behavior through a clear event kind. Done with `continuous`.
 
 ### Automation
 
@@ -220,7 +220,7 @@ Purpose: make the sonic palette worth composing with.
 Implement the next smallest useful archetypes:
 
 * `noise_burst`
-* `drone`
+* `drone`. Done as a continuous built-in source in Rust and SC backends.
 * `swarm`
 * `metal_hit`
 
