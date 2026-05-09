@@ -16,6 +16,7 @@ use clap::{Parser, Subcommand};
 use compiler::{ProjectConfig, compile_events, project_root_for};
 use manifest::load_manifest;
 use parser::parse_source;
+use serde::Serialize;
 
 #[derive(Debug, Parser)]
 #[command(name = "malison")]
@@ -249,18 +250,63 @@ fn run() -> Result<()> {
                 } else {
                     None
                 };
-                return renderer::render_supercollider(
+                renderer::render_supercollider(
                     &compiled,
                     &out_path,
                     sample_rate,
                     bit_depth,
                     script_artifact.as_deref(),
-                );
+                )?;
+                write_render_metadata(&compiled, &out_path, &backend, sample_rate, bit_depth)?;
+                return Ok(());
             }
 
-            renderer::render_wav(&compiled, &out_path, sample_rate, bit_depth)
+            renderer::render_wav(&compiled, &out_path, sample_rate, bit_depth)?;
+            write_render_metadata(&compiled, &out_path, &backend, sample_rate, bit_depth)
         }
     }
+}
+
+#[derive(Serialize)]
+struct RenderMetadata<'a> {
+    malison_version: &'a str,
+    ir_version: &'a str,
+    language: &'a str,
+    working: &'a str,
+    backend: &'a str,
+    sample_rate: u32,
+    bit_depth: u16,
+    seed: &'a str,
+    duration_beats: f64,
+    events: usize,
+    control_events: usize,
+    control_bindings: usize,
+}
+
+fn write_render_metadata(
+    compiled: &compiler::CompiledWorking,
+    out_path: &Path,
+    backend: &str,
+    sample_rate: u32,
+    bit_depth: u16,
+) -> Result<()> {
+    let metadata = RenderMetadata {
+        malison_version: env!("CARGO_PKG_VERSION"),
+        ir_version: &compiled.ir.ir_version,
+        language: &compiled.ir.language,
+        working: &compiled.ir.working,
+        backend,
+        sample_rate,
+        bit_depth,
+        seed: &compiled.ir.seed,
+        duration_beats: compiled.ir.duration_beats,
+        events: compiled.ir.events.len(),
+        control_events: compiled.ir.control_events.len(),
+        control_bindings: compiled.ir.control_bindings.len(),
+    };
+    let path = out_path.with_extension("malison.json");
+    fs::write(&path, serde_json::to_string_pretty(&metadata)?)
+        .with_context(|| format!("failed to write `{}`", path.display()))
 }
 
 fn validate_supercollider_feature_support(compiled: &compiler::CompiledWorking) -> Result<()> {

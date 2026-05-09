@@ -189,6 +189,7 @@ fn render_rust_backend_writes_wav() {
         .success();
 
     assert!(out.exists());
+    assert!(out.with_extension("malison.json").exists());
     let reader = hound::WavReader::open(out).unwrap();
     assert_eq!(reader.spec().channels, 2);
     assert_eq!(reader.spec().sample_rate, 48_000);

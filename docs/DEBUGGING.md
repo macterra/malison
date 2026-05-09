@@ -26,4 +26,6 @@ Use `events` when a sound happens at the wrong time. Events include:
 
 Use `graph --format dot` to visualize declarations, circles, render targets, events, and controls with Graphviz-compatible tooling.
 
+Successful renders write a deterministic `.malison.json` sidecar next to the WAV with the compiler version, backend, render settings, seed, and event/control counts.
+
 Use `diff` before and after edits to see how event counts and event identities changed.

@@ -360,9 +360,9 @@ Purpose: make Malison usable across more than one file and more than one sample 
 
 ### Libraries
 
-* Add local reusable spells and daemon presets.
+* Add local reusable spells and daemon presets. Done through local `.rite` fragments included inside a working.
 * Defer package management until local libraries are stable.
-* Keep dependency versions in render metadata for reproducibility.
+* Keep dependency versions in render metadata for reproducibility. Done with render sidecar metadata.
 
 ### Exit Criteria
 
