@@ -94,16 +94,14 @@ fn run() -> Result<()> {
             } else {
                 out_path
             };
-            if out_path.exists() && !force {
-                anyhow::bail!(
-                    "output `{}` already exists; pass --force to overwrite",
-                    out_path.display()
-                );
-            }
-
-            let script = compiler::supercollider_script(&compiled, sample_rate, bit_depth);
             if dry_run {
                 if backend == "supercollider" {
+                    let script = renderer::supercollider_script(
+                        &compiled,
+                        &out_path,
+                        sample_rate,
+                        bit_depth,
+                    )?;
                     println!("{script}");
                 } else {
                     println!(
@@ -116,9 +114,19 @@ fn run() -> Result<()> {
                 return Ok(());
             }
 
-            if backend == "supercollider" {
+            if out_path.exists() && !force {
                 anyhow::bail!(
-                    "SuperCollider execution is not implemented yet; use --backend rust to render the MVP target"
+                    "output `{}` already exists; pass --force to overwrite",
+                    out_path.display()
+                );
+            }
+
+            if backend == "supercollider" {
+                return renderer::render_supercollider(
+                    &compiled,
+                    &out_path,
+                    sample_rate,
+                    bit_depth,
                 );
             }
 

@@ -2,6 +2,8 @@ use std::collections::BTreeMap;
 use std::f32::consts::PI;
 use std::fs;
 use std::path::Path;
+use std::process::Command;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use anyhow::{Context, Result, bail};
 
@@ -50,6 +52,163 @@ pub fn render_wav(
             .with_context(|| format!("failed to create `{}`", parent.display()))?;
     }
     write_wav(out_path, sample_rate, bit_depth, &buffer)
+}
+
+pub fn render_supercollider(
+    compiled: &CompiledWorking,
+    out_path: &Path,
+    sample_rate: u32,
+    bit_depth: u16,
+) -> Result<()> {
+    if !matches!(bit_depth, 16 | 24 | 32) {
+        bail!("unsupported bit depth `{bit_depth}`; expected 16, 24, or 32");
+    }
+    if let Some(parent) = out_path
+        .parent()
+        .filter(|path| !path.as_os_str().is_empty())
+    {
+        fs::create_dir_all(parent)
+            .with_context(|| format!("failed to create `{}`", parent.display()))?;
+    }
+
+    let script = supercollider_script(compiled, out_path, sample_rate, bit_depth)?;
+    let script_path = temp_script_path();
+    fs::write(&script_path, script)
+        .with_context(|| format!("failed to write `{}`", script_path.display()))?;
+
+    let output = Command::new("sclang")
+        .arg(&script_path)
+        .env("QT_QPA_PLATFORM", "offscreen")
+        .output()
+        .context("failed to run `sclang`; is SuperCollider installed?")?;
+
+    let _ = fs::remove_file(&script_path);
+
+    if !output.status.success() {
+        bail!(
+            "sclang failed with status {}\nstdout:\n{}\nstderr:\n{}",
+            output.status,
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+    if !out_path.exists() {
+        bail!(
+            "SuperCollider completed but did not create `{}`\nstdout:\n{}\nstderr:\n{}",
+            out_path.display(),
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+    Ok(())
+}
+
+pub fn supercollider_script(
+    compiled: &CompiledWorking,
+    out_path: &Path,
+    sample_rate: u32,
+    bit_depth: u16,
+) -> Result<String> {
+    let mut daemons = BTreeMap::new();
+    for daemon in &compiled.ir.daemons {
+        daemons.insert(daemon.id.as_str(), daemon);
+    }
+
+    let mut sample_buffers = BTreeMap::new();
+    let mut next_bufnum = 0;
+    for daemon in &compiled.ir.daemons {
+        if daemon.kind == "sample" {
+            sample_buffers.insert(daemon.id.as_str(), next_bufnum);
+            next_bufnum += 1;
+        }
+    }
+
+    let mut score_lines = Vec::new();
+    score_lines.push("[0.0, [\\d_recv, SynthDef(\\mal_sample, { |out=0, bufnum=0, amp=1, pan=0, rate=1| var sig; sig = PlayBuf.ar(1, bufnum, BufRateScale.kr(bufnum) * rate, doneAction:2); Out.ar(out, Pan2.ar(sig * amp, pan)); }).asBytes]]".to_string());
+    score_lines.push("[0.0, [\\d_recv, SynthDef(\\mal_saw_sub, { |out=0, freq=55, dur=0.25, amp=0.3, pan=0, cutoff=1200, drive=0| var hold, env, sig, driven; hold = (dur - 0.19).max(0.001); env = EnvGen.kr(Env([0, 1, 0.65, 0.65, 0], [0.01, 0.18, hold, 0.08]), doneAction:2); sig = (Saw.ar(freq) * 0.72) + (Saw.ar(freq * 0.5) * 0.28); sig = RLPF.ar(sig, cutoff.clip(20, 20000), 0.35); driven = (sig * (1 + (drive * 12))).tanh; Out.ar(out, Pan2.ar(driven * env * amp, pan)); }).asBytes]]".to_string());
+
+    for daemon in &compiled.ir.daemons {
+        if daemon.kind == "sample" {
+            let sample_path = daemon.sample.as_deref().ok_or_else(|| {
+                anyhow::anyhow!("sample daemon `{}` has no sample path", daemon.id)
+            })?;
+            let path = compiled.project_root.join(sample_path);
+            let bufnum = sample_buffers[daemon.id.as_str()];
+            score_lines.push(format!(
+                "[0.0, [\\b_allocRead, {}, {}]]",
+                bufnum,
+                sc_string(&path.display().to_string())
+            ));
+        }
+    }
+
+    let mut node_id = 1000;
+    for event in &compiled.ir.events {
+        let daemon = daemons
+            .get(event.daemon.as_str())
+            .ok_or_else(|| anyhow::anyhow!("event references unknown daemon `{}`", event.daemon))?;
+        let time = beats_to_seconds(event.time_beats, compiled.ir.tempo_bpm);
+        match daemon.kind.as_str() {
+            "sample" => {
+                let amp = db_to_amp(param_f64(&event.params, "gain_db").unwrap_or(0.0));
+                let pan = param_f64(&event.params, "pan")
+                    .unwrap_or(0.0)
+                    .clamp(-1.0, 1.0);
+                let tune = param_f64(&event.params, "tune_semitones").unwrap_or(0.0);
+                let rate = 2.0_f64.powf(tune / 12.0);
+                let bufnum = sample_buffers[event.daemon.as_str()];
+                score_lines.push(format!(
+                    "[{time:.6}, [\\s_new, \\mal_sample, {node_id}, 0, 1, \\bufnum, {bufnum}, \\amp, {amp:.8}, \\pan, {pan:.8}, \\rate, {rate:.8}]]"
+                ));
+                node_id += 1;
+            }
+            "saw_sub" => {
+                if let Some(pitch) = &event.pitch {
+                    let freq = midi_to_freq(pitch.midi);
+                    let dur = beats_to_seconds(event.duration_beats, compiled.ir.tempo_bpm);
+                    let amp = db_to_amp(param_f64(&event.params, "gain_db").unwrap_or(-10.0));
+                    let pan = param_f64(&event.params, "pan")
+                        .unwrap_or(0.0)
+                        .clamp(-1.0, 1.0);
+                    let cutoff = param_f64(&event.params, "cutoff_hz").unwrap_or(1200.0);
+                    let drive = param_f64(&event.params, "drive")
+                        .unwrap_or(0.0)
+                        .clamp(0.0, 1.0);
+                    score_lines.push(format!(
+                        "[{time:.6}, [\\s_new, \\mal_saw_sub, {node_id}, 0, 1, \\freq, {freq:.8}, \\dur, {dur:.8}, \\amp, {amp:.8}, \\pan, {pan:.8}, \\cutoff, {cutoff:.8}, \\drive, {drive:.8}]]"
+                    ));
+                    node_id += 1;
+                }
+            }
+            other => bail!("unsupported daemon kind `{other}`"),
+        }
+    }
+
+    let duration =
+        beats_to_seconds(compiled.ir.duration_beats, compiled.ir.tempo_bpm) + RENDER_TAIL_SECONDS;
+    score_lines.push(format!("[{duration:.6}, [\\c_set, 0, 0]]"));
+
+    Ok(format!(
+        r#"(
+var opts, score;
+opts = ServerOptions.new.numOutputBusChannels_(2).sampleRate_({sample_rate});
+score = Score([
+  {}
+]);
+score.recordNRT(
+  outputFilePath: {},
+  sampleRate: {sample_rate},
+  headerFormat: "WAV",
+  sampleFormat: {},
+  options: opts,
+  duration: {duration:.6},
+  action: {{ 0.exit }}
+);
+)"#,
+        score_lines.join(",\n  "),
+        sc_string(&out_path.display().to_string()),
+        sc_string(sc_sample_format(bit_depth)?),
+    ))
 }
 
 fn render_sample(
@@ -258,6 +417,35 @@ fn db_to_amp(db: f64) -> f64 {
     10.0_f64.powf(db / 20.0)
 }
 
+fn midi_to_freq(midi: i32) -> f64 {
+    440.0 * 2.0_f64.powf((midi as f64 - 69.0) / 12.0)
+}
+
+fn sc_sample_format(bit_depth: u16) -> Result<&'static str> {
+    match bit_depth {
+        16 => Ok("int16"),
+        24 => Ok("int24"),
+        32 => Ok("int32"),
+        _ => bail!("unsupported bit depth `{bit_depth}`; expected 16, 24, or 32"),
+    }
+}
+
+fn sc_string(value: &str) -> String {
+    let escaped = value
+        .replace('\\', "\\\\")
+        .replace('"', "\\\"")
+        .replace('\n', "\\n");
+    format!("\"{escaped}\"")
+}
+
+fn temp_script_path() -> std::path::PathBuf {
+    let nonce = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|duration| duration.as_nanos())
+        .unwrap_or(0);
+    std::env::temp_dir().join(format!("malison-{nonce}.scd"))
+}
+
 fn float_to_i16(value: f32) -> i16 {
     (value.clamp(-1.0, 1.0) * i16::MAX as f32).round() as i16
 }
@@ -321,6 +509,53 @@ working "Render Test" {
         let reader = hound::WavReader::open(&out).unwrap();
         assert_eq!(reader.spec().channels, 2);
         assert_eq!(reader.spec().sample_rate, 48_000);
+
+        fs::remove_dir_all(&root).unwrap();
+    }
+
+    #[test]
+    fn generates_supercollider_nrt_script() {
+        let root = std::env::temp_dir().join(format!("malison-sc-test-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        fs::create_dir_all(root.join("samples")).unwrap();
+        fs::write(root.join("malison.toml"), "[project]\nname = \"sc-test\"\n").unwrap();
+        write_test_kick(&root.join("samples/kick.wav"));
+
+        let source = r#"
+language 0.1
+
+working "SC Test" {
+  tempo 128
+  meter 4/4
+  seed "first"
+
+  daemon kick = sample "samples/kick.wav" { gain -3 }
+  daemon bass = saw_sub { cutoff 300 drive 0.3 }
+
+  spell kicks = pattern "x---"
+  spell bassline = notes "F1 -"
+
+  rite main bars 1 {
+    invoke kick with kicks every 1/16
+    invoke bass with bassline every 1/8
+  }
+
+  evoke wav "renders/sc-test.wav"
+}
+"#;
+        let path = root.join("main.rite");
+        fs::write(&path, source).unwrap();
+        let working = parse_source(&path, source).unwrap();
+        let project_root = project_root_for(&path).unwrap();
+        let compiled = compile_events(&path, &project_root, working).unwrap();
+        let script =
+            supercollider_script(&compiled, &root.join("renders/sc-test.wav"), 48_000, 24).unwrap();
+
+        assert!(script.contains("Score(["));
+        assert!(script.contains("SynthDef(\\mal_sample"));
+        assert!(script.contains("SynthDef(\\mal_saw_sub"));
+        assert!(script.contains("\\b_allocRead"));
+        assert!(script.contains("sampleFormat: \"int24\""));
 
         fs::remove_dir_all(&root).unwrap();
     }

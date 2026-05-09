@@ -851,12 +851,10 @@ Built-in Rust WAV render
 Possible future backends:
 
 ```text
-SuperCollider non-realtime render
 MIDI + stems
 Ableton project export
 VST host automation
 WebAudio
-Rust DSP engine
 SuperCollider realtime session
 ```
 
@@ -1319,7 +1317,7 @@ channels      2
 tail          2.0 sec after the final event
 ```
 
-The first backend should render WAV directly in Rust so the MVP has no external audio-engine dependency. A SuperCollider backend may be added later and must preserve the same Malison event semantics.
+The first backend should render WAV directly in Rust so the MVP has no external audio-engine dependency. A SuperCollider non-realtime backend may also be provided and must preserve the same Malison event semantics.
 
 ## 19. Non-Goals
 
@@ -1370,8 +1368,8 @@ Darkness should emerge from rhythm, timbre, harmony, pressure, space, degradatio
 * Parse one `language 0.1` file.
 * Expand patterns into events.
 * Emit source-mapped JSON events.
-* Generate a simple SuperCollider script.
-* Render WAV through SuperCollider.
+* Render WAV through the built-in Rust backend.
+* Generate and run a simple SuperCollider non-realtime score.
 * Support one sample daemon and one synth daemon.
 
 ### Phase 1: Real frontend
