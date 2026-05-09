@@ -11,10 +11,24 @@ Implemented commands:
 ```bash
 cargo run -- check path/to/main.rite
 cargo run -- events path/to/main.rite
-cargo run -- render path/to/main.rite --dry-run
+cargo run -- render path/to/main.rite
 ```
 
-`render --dry-run` emits the generated SuperCollider source stub. Full audio rendering is not implemented yet.
+The version `0.1` renderer currently uses the built-in Rust backend. It supports WAV sample triggers and the `saw_sub` synth needed by the MVP target.
+
+Try the included MVP working:
+
+```bash
+cargo run -- render examples/first-working/main.rite --force
+```
+
+This writes:
+
+```text
+examples/first-working/renders/first-working.wav
+```
+
+`render --backend supercollider --dry-run` emits the generated SuperCollider source stub. Full SuperCollider execution is not implemented yet.
 
 ## Development
 

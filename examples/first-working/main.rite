@@ -1,0 +1,26 @@
+language 0.1
+
+working "First Working" {
+  tempo 128
+  meter 4/4
+  seed "first"
+
+  daemon kick = sample "samples/kick.wav" {
+    gain -3
+  }
+
+  daemon bass = saw_sub {
+    cutoff 300
+    drive 0.3
+  }
+
+  spell kicks = pattern "x--- x--- x-x- x---"
+  spell bassline = notes "F1 - F1 Gb1 | Ab1 - F1 Eb1"
+
+  rite main bars 16 {
+    invoke kick with kicks every 1/16
+    invoke bass with bassline every 1/8
+  }
+
+  evoke wav "renders/first-working.wav"
+}

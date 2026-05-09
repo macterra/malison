@@ -11,6 +11,7 @@ use crate::parser::{DaemonKind, PatternKind, Value, Working};
 pub struct CompiledWorking {
     pub ir: Ir,
     pub evoke_wav: PathBuf,
+    pub project_root: PathBuf,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -257,6 +258,7 @@ pub fn compile_events(
 
     Ok(CompiledWorking {
         evoke_wav: PathBuf::from(working.evoke_wav),
+        project_root: project_root.to_path_buf(),
         ir,
     })
 }

@@ -4,7 +4,7 @@
 
 First draft. This document defines the initial design for **Malison**, a domain-specific language and compiler for composing dark electronic music as executable programs.
 
-Malison is intended to produce rendered audio from source files. Its first implementation target is offline rendering through an existing synthesis backend, with SuperCollider as the likely initial backend. The long-term design preserves backend independence through a stable intermediate representation.
+Malison is intended to produce rendered audio from source files. Its first implementation target is a small built-in offline WAV renderer for the version `0.1` MVP. The long-term design preserves backend independence through a stable intermediate representation, with SuperCollider as a likely early external backend.
 
 ## 1. Purpose
 
@@ -48,7 +48,7 @@ These concepts should lower to concrete synthesis, pattern, effect, and mix para
 
 Malison must avoid defining its semantics in terms of SuperCollider, MIDI, VSTs, Ableton Live, WebAudio, or any specific audio engine.
 
-SuperCollider may be the first backend. It must not become the language.
+SuperCollider may be an early backend. It must not become the language.
 
 The compiler pipeline should be:
 
@@ -842,15 +842,16 @@ It should represent:
 
 ### 12.3 Backend generation
 
-Initial backend:
+Initial MVP backend:
 
 ```text
-SuperCollider non-realtime render
+Built-in Rust WAV render
 ```
 
 Possible future backends:
 
 ```text
+SuperCollider non-realtime render
 MIDI + stems
 Ableton project export
 VST host automation
@@ -865,7 +866,7 @@ Each backend must publish a capability table used by semantic validation:
 
 ```json
 {
-  "backend": "supercollider-nrt",
+  "backend": "rust",
   "profile": "0.1",
   "sample_rates": [44100, 48000, 96000],
   "bit_depths": [16, 24, 32],
@@ -1035,6 +1036,7 @@ Options:
 
 ```bash
 --backend supercollider
+--backend rust
 --seed override-seed
 --stems
 --sample-rate 48000
@@ -1082,7 +1084,7 @@ version = "0.1.0"
 [render]
 sample_rate = 48000
 bit_depth = 24
-backend = "supercollider"
+backend = "rust"
 
 [paths]
 samples = ["samples", "~/Malison/samples"]
@@ -1112,7 +1114,7 @@ Required:
 * deterministic pattern expansion
 * deterministic event IDs
 * source-mapped diagnostics
-* SuperCollider non-realtime backend
+* built-in Rust WAV backend
 * `check`, `render`, `events`
 
 Deferred:
@@ -1310,14 +1312,14 @@ By default, `render` refuses to overwrite an existing output file. `--force` all
 Version `0.1` render defaults:
 
 ```text
-backend       supercollider
+backend       rust
 sample rate   48000
 bit depth     24
 channels      2
 tail          2.0 sec after the final event
 ```
 
-The first backend should generate a SuperCollider source script and run it in non-realtime mode. Direct OSC score generation may replace this later without changing Malison semantics.
+The first backend should render WAV directly in Rust so the MVP has no external audio-engine dependency. A SuperCollider backend may be added later and must preserve the same Malison event semantics.
 
 ## 19. Non-Goals
 
