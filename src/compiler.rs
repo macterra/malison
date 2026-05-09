@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 use anyhow::{Context, Result, bail};
 
 use crate::ir::{
-    Ir, IrControlEvent, IrDaemon, IrEvent, IrPitch, IrRandomStream, IrRenderTarget, IrRite,
+    Ir, IrCircle, IrControlEvent, IrDaemon, IrEvent, IrPitch, IrRandomStream, IrRenderTarget, IrRite,
     IrSource, IrSpell,
 };
 use crate::parser::{
@@ -43,6 +43,10 @@ pub fn compile_events(
 ) -> Result<CompiledWorking> {
     validate_working_header(&working)?;
     validate_unique_names(
+        "circle",
+        working.circles.iter().map(|circle| circle.name.as_str()),
+    )?;
+    validate_unique_names(
         "daemon",
         working.daemons.iter().map(|daemon| daemon.name.as_str()),
     )?;
@@ -57,6 +61,7 @@ pub fn compile_events(
         .iter()
         .map(|daemon| (daemon.name.as_str(), daemon))
         .collect::<BTreeMap<_, _>>();
+    validate_circles(&working)?;
     let spell_map = working
         .spells
         .iter()
@@ -237,6 +242,7 @@ pub fn compile_events(
     });
 
     let random_streams = random_streams_for(&working);
+    let circles = ir_circles(input, &working);
     let evoke_wav = working.evoke_wav;
     let ir = Ir {
         ir_version: "0.1".to_string(),
@@ -247,6 +253,7 @@ pub fn compile_events(
         seed: working.seed,
         random_streams,
         duration_beats: cursor_beats,
+        circles,
         daemons: working
             .daemons
             .iter()
@@ -377,6 +384,54 @@ fn validate_invokes(
         bail!("{}", errors.join("\n"));
     }
     Ok(())
+}
+
+fn validate_circles(working: &Working) -> Result<()> {
+    let mut parents = BTreeMap::new();
+    parents.insert("master", None::<&str>);
+    for circle in &working.circles {
+        parents.insert(circle.name.as_str(), circle.parent.as_deref().or(Some("master")));
+    }
+    for circle in &working.circles {
+        if let Some(parent) = circle.parent.as_deref()
+            && !parents.contains_key(parent)
+        {
+            bail!("{}: unresolved circle `{parent}`", circle.span);
+        }
+        let mut seen = HashSet::new();
+        let mut cursor = circle.name.as_str();
+        while let Some(Some(parent)) = parents.get(cursor) {
+            if !seen.insert(cursor) {
+                bail!("{}: routing cycle involving circle `{}`", circle.span, circle.name);
+            }
+            cursor = parent;
+        }
+    }
+    for daemon in &working.daemons {
+        for param in &daemon.params {
+            if param.name == "out"
+                && let Value::String(circle) = &param.value
+                && !parents.contains_key(circle.as_str())
+            {
+                bail!("{}: unresolved circle `{circle}`", daemon.span);
+            }
+        }
+    }
+    Ok(())
+}
+
+fn ir_circles(input: &Path, working: &Working) -> Vec<IrCircle> {
+    let mut circles = vec![IrCircle {
+        id: "master".to_string(),
+        parent: None,
+        source: source_for_span(input, working.evoke_span),
+    }];
+    circles.extend(working.circles.iter().map(|circle| IrCircle {
+        id: circle.name.clone(),
+        parent: circle.parent.clone().or_else(|| Some("master".to_string())),
+        source: source_for_span(input, circle.span),
+    }));
+    circles
 }
 
 fn ranges_overlap(left_start: f64, left_end: f64, right_start: f64, right_end: f64) -> bool {
@@ -895,25 +950,25 @@ fn validate_params(owner: &str, kind: DaemonKind, params: &[crate::parser::Param
         let allowed = match kind {
             DaemonKind::Sample => matches!(
                 param.name.as_str(),
-                "gain" | "pan" | "tune" | "highpass" | "lowpass" | "start" | "end"
+                "gain" | "pan" | "tune" | "highpass" | "lowpass" | "start" | "end" | "out"
             ),
             DaemonKind::SawSub => {
-                matches!(param.name.as_str(), "gain" | "pan" | "cutoff" | "drive")
+                matches!(param.name.as_str(), "gain" | "pan" | "cutoff" | "drive" | "out")
             }
             DaemonKind::Drone => {
-                matches!(param.name.as_str(), "gain" | "pan" | "cutoff" | "drive" | "root")
+                matches!(param.name.as_str(), "gain" | "pan" | "cutoff" | "drive" | "root" | "out")
             }
             DaemonKind::NoiseBurst => {
-                matches!(param.name.as_str(), "gain" | "pan" | "highpass" | "lowpass" | "drive")
+                matches!(param.name.as_str(), "gain" | "pan" | "highpass" | "lowpass" | "drive" | "out")
             }
             DaemonKind::Swarm => {
                 matches!(
                     param.name.as_str(),
-                    "gain" | "pan" | "cutoff" | "drive" | "root" | "voices" | "spread"
+                    "gain" | "pan" | "cutoff" | "drive" | "root" | "voices" | "spread" | "out"
                 )
             }
             DaemonKind::MetalHit => {
-                matches!(param.name.as_str(), "gain" | "pan" | "root" | "drive" | "decay")
+                matches!(param.name.as_str(), "gain" | "pan" | "root" | "drive" | "decay" | "out")
             }
         };
         if !allowed {
@@ -930,6 +985,12 @@ fn validate_param_value(owner: &str, name: &str, value: &Value) -> Result<()> {
             return Ok(());
         }
         bail!("`{owner}` parameter `root` must be a pitch");
+    }
+    if name == "out" {
+        if matches!(value, Value::String(_)) {
+            return Ok(());
+        }
+        bail!("`{owner}` parameter `out` must be a circle name");
     }
     let number = match value {
         Value::Number(number) => *number,
@@ -1501,6 +1562,48 @@ working "Automation Test" {
         assert_eq!(compiled.ir.control_events.len(), 1);
         assert_eq!(compiled.ir.control_events[0].target, "tension");
         assert_eq!(compiled.ir.control_events[0].duration_beats, 8.0);
+
+        fs::remove_dir_all(&root).unwrap();
+    }
+
+    #[test]
+    fn validates_circle_routing() {
+        let root = std::env::temp_dir().join(format!("malison-circle-test-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        fs::create_dir_all(root.join("samples")).unwrap();
+        fs::write(root.join("samples/kick.wav"), b"not really wav").unwrap();
+
+        let source = r#"
+language 0.1
+
+working "Circle Test" {
+  tempo 120
+  meter 4/4
+  seed "seed"
+
+  circle drums -> master {}
+  daemon kick = sample "samples/kick.wav" { out drums }
+  spell hits = pattern "x---"
+
+  rite main bars 1 {
+    invoke kick with hits every 1/16
+  }
+
+  evoke wav "renders/test.wav"
+}
+"#;
+        let path = root.join("main.rite");
+        fs::write(&path, source).unwrap();
+        let working = parse_source(&path, source).unwrap();
+        let compiled = compile_events(&path, &root, working).unwrap();
+        assert_eq!(compiled.ir.circles.len(), 2);
+        assert_eq!(compiled.ir.circles[1].parent.as_deref(), Some("master"));
+
+        let bad = source.replace("out drums", "out nowhere");
+        fs::write(&path, &bad).unwrap();
+        let working = parse_source(&path, &bad).unwrap();
+        let error = compile_events(&path, &root, working).unwrap_err().to_string();
+        assert!(error.contains("unresolved circle `nowhere`"));
 
         fs::remove_dir_all(&root).unwrap();
     }

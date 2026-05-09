@@ -10,11 +10,19 @@ pub struct Working {
     pub tempo_bpm: f64,
     pub meter: (u32, u32),
     pub seed: String,
+    pub circles: Vec<Circle>,
     pub daemons: Vec<Daemon>,
     pub spells: Vec<Spell>,
     pub rites: Vec<Rite>,
     pub evoke_wav: String,
     pub evoke_span: Span,
+}
+
+#[derive(Clone, Debug)]
+pub struct Circle {
+    pub name: String,
+    pub parent: Option<String>,
+    pub span: Span,
 }
 
 #[derive(Clone, Debug)]
@@ -162,6 +170,7 @@ impl<'a> Parser<'a> {
         let mut tempo_bpm = None;
         let mut meter = None;
         let mut seed = None;
+        let mut circles = Vec::new();
         let mut daemons = Vec::new();
         let mut spells = Vec::new();
         let mut rites = Vec::new();
@@ -190,6 +199,7 @@ impl<'a> Parser<'a> {
                     reject_duplicate("seed", &seed)?;
                     seed = Some(self.expect_string()?);
                 }
+                "circle" => circles.push(self.parse_circle()?),
                 "daemon" => daemons.push(self.parse_daemon()?),
                 "spell" => spells.push(self.parse_spell()?),
                 "rite" => rites.push(self.parse_rite()?),
@@ -219,6 +229,7 @@ impl<'a> Parser<'a> {
             tempo_bpm: tempo_bpm.ok_or_else(|| anyhow::anyhow!("missing `tempo`"))?,
             meter: meter.ok_or_else(|| anyhow::anyhow!("missing `meter`"))?,
             seed: seed.ok_or_else(|| anyhow::anyhow!("missing `seed`"))?,
+            circles,
             daemons,
             spells,
             rites,
@@ -264,6 +275,25 @@ impl<'a> Parser<'a> {
             params,
             span,
         })
+    }
+
+    fn parse_circle(&mut self) -> Result<Circle> {
+        let span = self.previous_span();
+        let name = self.expect_decl_name("circle")?;
+        let parent = if self.check(TokenKind::Arrow) {
+            self.advance();
+            Some(self.expect_ident_any()?)
+        } else {
+            None
+        };
+        self.expect(TokenKind::LBrace)?;
+        while !self.check(TokenKind::RBrace) {
+            if self.advance().is_none() {
+                bail!("{}: expected `}}`", self.eof_location());
+            }
+        }
+        self.expect(TokenKind::RBrace)?;
+        Ok(Circle { name, parent, span })
     }
 
     fn parse_spell(&mut self) -> Result<Spell> {
@@ -695,6 +725,7 @@ fn is_reserved_word(value: &str) -> bool {
             | "tempo"
             | "meter"
             | "seed"
+            | "circle"
             | "daemon"
             | "sample"
             | "saw_sub"

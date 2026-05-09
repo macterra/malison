@@ -18,6 +18,11 @@ expression: json
     {
       "from": "working:CLI Test",
       "kind": "declares",
+      "to": "circle:master"
+    },
+    {
+      "from": "working:CLI Test",
+      "kind": "declares",
       "to": "spell:kicks"
     },
     {
@@ -132,6 +137,11 @@ expression: json
       "id": "daemon:bass",
       "kind": "daemon",
       "label": "bass"
+    },
+    {
+      "id": "circle:master",
+      "kind": "circle",
+      "label": "master"
     },
     {
       "id": "spell:kicks",

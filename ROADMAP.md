@@ -252,11 +252,11 @@ Purpose: introduce the `circle`, `effect`, and `ward` concepts after core event 
 
 ### Circles
 
-* Parse circle declarations.
-* Implement implicit `master` as an explicit IR node.
-* Validate unresolved circles.
-* Validate routing cycles.
-* Support daemon `out` parameters.
+* Parse circle declarations. Done.
+* Implement implicit `master` as an explicit IR node. Done.
+* Validate unresolved circles. Done.
+* Validate routing cycles. Done.
+* Support daemon `out` parameters. Done in IR/validation; audio bus routing remains pending.
 
 ### Effects
 

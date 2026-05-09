@@ -12,6 +12,7 @@ pub struct Ir {
     pub seed: String,
     pub random_streams: Vec<IrRandomStream>,
     pub duration_beats: f64,
+    pub circles: Vec<IrCircle>,
     pub daemons: Vec<IrDaemon>,
     pub spells: Vec<IrSpell>,
     pub rites: Vec<IrRite>,
@@ -27,6 +28,14 @@ pub struct IrDaemon {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub sample: Option<String>,
     pub params: BTreeMap<String, serde_json::Value>,
+    pub source: IrSource,
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub struct IrCircle {
+    pub id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub parent: Option<String>,
     pub source: IrSource,
 }
 
@@ -150,6 +159,27 @@ impl Ir {
                 to: id,
                 kind: "declares".to_string(),
             });
+        }
+
+        for circle in &self.circles {
+            let id = format!("circle:{}", circle.id);
+            nodes.push(IrGraphNode {
+                id: id.clone(),
+                kind: "circle".to_string(),
+                label: circle.id.clone(),
+            });
+            edges.push(IrGraphEdge {
+                from: working_id.clone(),
+                to: id.clone(),
+                kind: "declares".to_string(),
+            });
+            if let Some(parent) = &circle.parent {
+                edges.push(IrGraphEdge {
+                    from: id,
+                    to: format!("circle:{parent}"),
+                    kind: "routes_to".to_string(),
+                });
+            }
         }
 
         for spell in &self.spells {

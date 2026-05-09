@@ -21,6 +21,7 @@ The current schema version is `0.1`. Object keys are emitted in stable order, an
   "seed": "first",
   "random_streams": [],
   "duration_beats": 4.0,
+  "circles": [],
   "daemons": [],
   "spells": [],
   "rites": [],
@@ -43,6 +44,26 @@ Random streams reserve stable identities for deterministic stochastic features.
 ```
 
 The stream hash is derived from the working seed and semantic path. Future probability and humanization features should draw from these streams instead of source locations.
+
+## Daemons
+
+## Circles
+
+Circles describe routing nodes. `master` is implicit and emitted in IR.
+
+```json
+{
+  "id": "drums",
+  "parent": "master",
+  "source": {
+    "file": "examples/second-working/main.rite",
+    "line": 9,
+    "column": 3
+  }
+}
+```
+
+Daemon `out` parameters refer to circle IDs.
 
 ## Daemons
 
