@@ -34,7 +34,13 @@ enum Command {
     /// Validate and print deterministic JSON events.
     Events { file: PathBuf },
     /// Validate and print a deterministic JSON graph.
-    Graph { file: PathBuf },
+    Graph {
+        file: PathBuf,
+        #[arg(long, default_value = "json")]
+        format: String,
+    },
+    /// Compare two source files by deterministic IR/event output.
+    Diff { left: PathBuf, right: PathBuf },
     /// Inspect event expansion in a human-readable form.
     Scry { file: PathBuf },
     /// Format a source file in place.
@@ -118,9 +124,20 @@ fn run() -> Result<()> {
             println!("{}", serde_json::to_string_pretty(&compiled.ir)?);
             Ok(())
         }
-        Command::Graph { file } => {
+        Command::Graph { file, format } => {
             let compiled = load_and_compile(&file)?;
-            println!("{}", serde_json::to_string_pretty(&compiled.ir.graph())?);
+            let graph = compiled.ir.graph();
+            match format.as_str() {
+                "json" => println!("{}", serde_json::to_string_pretty(&graph)?),
+                "dot" => println!("{}", graph_dot(&graph)),
+                other => anyhow::bail!("graph format `{other}` is not supported"),
+            }
+            Ok(())
+        }
+        Command::Diff { left, right } => {
+            let left = load_and_compile(&left)?;
+            let right = load_and_compile(&right)?;
+            print_ir_diff(&left.ir, &right.ir);
             Ok(())
         }
         Command::Scry { file } => {
@@ -219,6 +236,68 @@ fn run() -> Result<()> {
             renderer::render_wav(&compiled, &out_path, sample_rate, bit_depth)
         }
     }
+}
+
+fn graph_dot(graph: &ir::IrGraph) -> String {
+    let mut dot = String::from("digraph malison {\n");
+    for node in &graph.nodes {
+        dot.push_str(&format!(
+            "  \"{}\" [label=\"{}\", shape={}];\n",
+            dot_escape(&node.id),
+            dot_escape(&node.label),
+            match node.kind.as_str() {
+                "event" => "point",
+                "circle" => "box",
+                "control" => "diamond",
+                _ => "ellipse",
+            }
+        ));
+    }
+    for edge in &graph.edges {
+        dot.push_str(&format!(
+            "  \"{}\" -> \"{}\" [label=\"{}\"];\n",
+            dot_escape(&edge.from),
+            dot_escape(&edge.to),
+            dot_escape(&edge.kind)
+        ));
+    }
+    dot.push_str("}\n");
+    dot
+}
+
+fn dot_escape(value: &str) -> String {
+    value.replace('\\', "\\\\").replace('"', "\\\"")
+}
+
+fn print_ir_diff(left: &ir::Ir, right: &ir::Ir) {
+    println!("working: {} -> {}", left.working, right.working);
+    println!(
+        "events: {} -> {} ({:+})",
+        left.events.len(),
+        right.events.len(),
+        right.events.len() as isize - left.events.len() as isize
+    );
+    println!(
+        "control_events: {} -> {} ({:+})",
+        left.control_events.len(),
+        right.control_events.len(),
+        right.control_events.len() as isize - left.control_events.len() as isize
+    );
+
+    let left_ids = left
+        .events
+        .iter()
+        .map(|event| event.id.as_str())
+        .collect::<std::collections::BTreeSet<_>>();
+    let right_ids = right
+        .events
+        .iter()
+        .map(|event| event.id.as_str())
+        .collect::<std::collections::BTreeSet<_>>();
+    let added = right_ids.difference(&left_ids).count();
+    let removed = left_ids.difference(&right_ids).count();
+    println!("event_ids_added: {added}");
+    println!("event_ids_removed: {removed}");
 }
 
 fn load_and_compile(path: &Path) -> Result<compiler::CompiledWorking> {

@@ -388,10 +388,10 @@ Purpose: make Malison pleasant to write, inspect, and refactor.
 
 ### Developer Tools
 
-* `malison graph` visual output.
+* `malison graph` visual output. Done with DOT output.
 * `malison scry` richer causality reports.
 * Audio preview cache.
-* Semantic diff for IR/event changes.
+* Semantic diff for IR/event changes. Done with `malison diff`.
 
 ### Exit Criteria
 

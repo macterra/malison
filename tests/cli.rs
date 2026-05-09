@@ -90,6 +90,39 @@ fn graph_outputs_deterministic_json() {
 }
 
 #[test]
+fn graph_outputs_dot() {
+    let fixture = Fixture::new();
+
+    Command::cargo_bin("malison")
+        .unwrap()
+        .arg("graph")
+        .arg(fixture.main_rite())
+        .arg("--format")
+        .arg("dot")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("digraph malison"))
+        .stdout(predicate::str::contains("working:CLI Test"));
+}
+
+#[test]
+fn diff_outputs_semantic_summary() {
+    let fixture = Fixture::new();
+    let other = fixture.root.path().join("other.rite");
+    fs::write(&other, RITE.replace("pattern \"x---\"", "pattern \"xx--\"")).unwrap();
+
+    Command::cargo_bin("malison")
+        .unwrap()
+        .arg("diff")
+        .arg(fixture.main_rite())
+        .arg(other)
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("events: 8 -> 12 (+4)"))
+        .stdout(predicate::str::contains("event_ids_added:"));
+}
+
+#[test]
 fn comments_and_whitespace_do_not_change_events() {
     let mut baseline = events_json(RITE);
     let mut reformatted = events_json(
