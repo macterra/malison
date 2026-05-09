@@ -947,10 +947,14 @@ fn stable_index(value: &str, len: usize) -> usize {
 fn resolve_sample_path(compiled: &CompiledWorking, sample_path: &str) -> std::path::PathBuf {
     let direct = compiled.project_root.join(sample_path);
     if direct.exists() {
-        direct
-    } else {
-        compiled.sample_root.join(sample_path)
+        return direct;
     }
+    compiled
+        .sample_roots
+        .iter()
+        .map(|root| root.join(sample_path))
+        .find(|path| path.exists())
+        .unwrap_or_else(|| compiled.sample_root.join(sample_path))
 }
 
 struct WavInfo {

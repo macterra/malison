@@ -33,6 +33,8 @@ pub struct RenderManifest {
 pub struct PathsManifest {
     #[serde(default = "default_samples_path")]
     pub samples: PathBuf,
+    #[serde(default)]
+    pub sample_libraries: Vec<PathBuf>,
     #[serde(default = "default_renders_path")]
     pub renders: PathBuf,
     #[serde(default = "default_build_path")]
@@ -53,6 +55,7 @@ impl Default for PathsManifest {
     fn default() -> Self {
         Self {
             samples: default_samples_path(),
+            sample_libraries: Vec::new(),
             renders: default_renders_path(),
             build: default_build_path(),
         }

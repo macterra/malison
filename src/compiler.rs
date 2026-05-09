@@ -19,6 +19,7 @@ pub struct CompiledWorking {
     pub evoke_wav: PathBuf,
     pub project_root: PathBuf,
     pub sample_root: PathBuf,
+    pub sample_roots: Vec<PathBuf>,
     pub render_root: PathBuf,
     pub build_root: PathBuf,
     pub render_backend: String,
@@ -29,6 +30,7 @@ pub struct CompiledWorking {
 #[derive(Clone, Debug)]
 pub struct ProjectConfig {
     pub sample_dir: PathBuf,
+    pub sample_libraries: Vec<PathBuf>,
     pub render_dir: PathBuf,
     pub build_dir: PathBuf,
 }
@@ -43,6 +45,7 @@ impl Default for ProjectConfig {
     fn default() -> Self {
         Self {
             sample_dir: PathBuf::from("samples"),
+            sample_libraries: Vec::new(),
             render_dir: PathBuf::from("renders"),
             build_dir: PathBuf::from("build"),
         }
@@ -420,6 +423,7 @@ pub fn compile_events_with_source_map(
         evoke_wav: PathBuf::from(evoke_wav),
         project_root: project_root.to_path_buf(),
         sample_root: project_root.join(&config.sample_dir),
+        sample_roots: sample_roots(project_root, config),
         render_root: project_root.join(&config.render_dir),
         build_root: project_root.join(&config.build_dir),
         render_backend: "rust".to_string(),
@@ -1332,9 +1336,14 @@ fn validate_sample_path(project_root: &Path, config: &ProjectConfig, sample: &st
         bail!("sample path `{sample}` is not valid in language 0.1");
     }
     let direct_path = project_root.join(sample);
-    let manifest_path = project_root.join(&config.sample_dir).join(sample);
-    if !direct_path.exists() && !manifest_path.exists() {
-        bail!("sample file `{}` does not exist", manifest_path.display());
+    let roots = sample_roots(project_root, config);
+    if !direct_path.exists() && !roots.iter().any(|root| root.join(sample).exists()) {
+        let searched = roots
+            .iter()
+            .map(|root| root.join(sample).display().to_string())
+            .collect::<Vec<_>>()
+            .join(", ");
+        bail!("sample file `{sample}` does not exist; searched {searched}");
     }
     Ok(())
 }
@@ -1348,11 +1357,15 @@ fn validate_samplekit_path(
         bail!("samplekit path `{sample_dir}` is not valid in language 0.1");
     }
     let direct_path = project_root.join(sample_dir);
-    let manifest_path = project_root.join(&config.sample_dir).join(sample_dir);
+    let roots = sample_roots(project_root, config);
     let path = if direct_path.exists() {
         direct_path
     } else {
-        manifest_path
+        roots
+            .iter()
+            .map(|root| root.join(sample_dir))
+            .find(|path| path.is_dir())
+            .unwrap_or_else(|| roots[0].join(sample_dir))
     };
     if !path.is_dir() {
         bail!("samplekit directory `{}` does not exist", path.display());
@@ -1368,6 +1381,25 @@ fn validate_samplekit_path(
         );
     }
     Ok(())
+}
+
+fn sample_roots(project_root: &Path, config: &ProjectConfig) -> Vec<PathBuf> {
+    let mut roots = vec![resolve_project_path(project_root, &config.sample_dir)];
+    roots.extend(
+        config
+            .sample_libraries
+            .iter()
+            .map(|path| resolve_project_path(project_root, path)),
+    );
+    roots
+}
+
+fn resolve_project_path(project_root: &Path, path: &Path) -> PathBuf {
+    if path.is_absolute() {
+        path.to_path_buf()
+    } else {
+        project_root.join(path)
+    }
 }
 
 pub fn validate_output_path(out_path: &Path) -> Result<()> {

@@ -35,6 +35,8 @@ Supported declarations:
 
 Inside a `working` block, `include "relative/path.rite"` expands another `.rite` fragment before parsing. Included fragments may contain declarations or rite blocks without their own `language` or `working` wrapper.
 
+Sample paths are resolved first relative to the project root, then through `[paths].samples`, then each folder in `[paths].sample_libraries`.
+
 Supported rite statements:
 
 * `invoke daemon`

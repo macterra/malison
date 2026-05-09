@@ -257,6 +257,63 @@ working "Manifest Test" {
 }
 
 #[test]
+fn manifest_can_use_shared_sample_libraries() {
+    let root = tempfile::tempdir().unwrap();
+    let shared = tempfile::tempdir().unwrap();
+    fs::create_dir_all(shared.path().join("drums")).unwrap();
+    fs::write(
+        root.path().join("malison.toml"),
+        format!(
+            r#"
+[project]
+name = "shared-samples-test"
+
+[paths]
+samples = "samples"
+sample_libraries = [{}]
+renders = "renders"
+build = "build"
+"#,
+            toml::Value::String(shared.path().display().to_string())
+        ),
+    )
+    .unwrap();
+    write_test_kick(&shared.path().join("drums/kick.wav"));
+    fs::write(
+        root.path().join("main.rite"),
+        r#"
+language 0.1
+
+working "Shared Samples Test" {
+  tempo 120
+  meter 4/4
+  seed "shared"
+
+  daemon kick = sample "drums/kick.wav"
+  spell hits = pattern "x---"
+
+  rite main bars 1 {
+    invoke kick with hits every 1/16
+  }
+
+  evoke wav "shared.wav"
+}
+"#,
+    )
+    .unwrap();
+
+    Command::cargo_bin("malison")
+        .unwrap()
+        .arg("render")
+        .arg(root.path().join("main.rite"))
+        .arg("--force")
+        .assert()
+        .success();
+
+    assert!(root.path().join("renders/shared.wav").exists());
+}
+
+#[test]
 fn check_accepts_included_rite_fragments() {
     let root = tempfile::tempdir().unwrap();
     fs::create_dir_all(root.path().join("samples")).unwrap();

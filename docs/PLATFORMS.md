@@ -19,3 +19,13 @@ For SuperCollider rendering, install SuperCollider and ensure `sclang` is availa
 The Rust backend should work with the standard Rust toolchain.
 
 SuperCollider support depends on `sclang` being available on `PATH`; this has less project test coverage than Linux.
+
+## Shared Samples
+
+Shared sample libraries can live outside an individual track folder. Add them to `malison.toml`:
+
+```toml
+[paths]
+samples = "samples"
+sample_libraries = ["/Volumes/audio/samples", "../../shared-samples"]
+```

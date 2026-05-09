@@ -554,6 +554,7 @@ fn load_and_compile(path: &Path) -> Result<compiler::CompiledWorking> {
     let manifest = load_manifest(&project_root)?;
     let config = ProjectConfig {
         sample_dir: manifest.paths.samples.clone(),
+        sample_libraries: manifest.paths.sample_libraries.clone(),
         render_dir: manifest.paths.renders.clone(),
         build_dir: manifest.paths.build.clone(),
     };
