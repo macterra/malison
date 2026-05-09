@@ -18,6 +18,7 @@ pub struct Ir {
     pub rites: Vec<IrRite>,
     pub render_targets: Vec<IrRenderTarget>,
     pub control_events: Vec<IrControlEvent>,
+    pub control_bindings: Vec<IrControlBinding>,
     pub events: Vec<IrEvent>,
 }
 
@@ -93,6 +94,21 @@ pub struct IrControlEvent {
     pub from: f64,
     pub to: f64,
     pub source: IrSource,
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub struct IrControlBinding {
+    pub id: String,
+    pub semantic_path: String,
+    pub source: String,
+    pub target_daemon: String,
+    pub target_param: String,
+    pub curve: String,
+    pub start_beats: f64,
+    pub duration_beats: f64,
+    pub from: f64,
+    pub to: f64,
+    pub source_location: IrSource,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -295,6 +311,25 @@ impl Ir {
                     kind: "automates".to_string(),
                 });
             }
+        }
+
+        for binding in &self.control_bindings {
+            let id = format!("binding:{}", binding.id);
+            nodes.push(IrGraphNode {
+                id: id.clone(),
+                kind: "binding".to_string(),
+                label: format!("{}.{}", binding.target_daemon, binding.target_param),
+            });
+            edges.push(IrGraphEdge {
+                from: format!("daemon:{}", binding.target_daemon),
+                to: id.clone(),
+                kind: "binds".to_string(),
+            });
+            edges.push(IrGraphEdge {
+                from: format!("control:{}", binding.source),
+                to: id,
+                kind: "drives".to_string(),
+            });
         }
 
         IrGraph {

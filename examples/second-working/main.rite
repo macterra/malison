@@ -31,6 +31,8 @@ working "Second Working" {
     invoke bass with bassline every 1/8
     invoke grit with gritline every 1/16
     raise tension 0.35 -> 0.9
+    bind bass.cutoff to tension 180 -> 1200 curve exponential
+    bind grit.drive to tension 0.1 -> 0.65
   }
 
   rite collapse at bar 13 bars 4 {

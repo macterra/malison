@@ -98,6 +98,7 @@ pub struct Rite {
     pub invokes: Vec<Invoke>,
     pub banishes: Vec<Banish>,
     pub automations: Vec<Automation>,
+    pub bindings: Vec<Binding>,
     pub span: Span,
 }
 
@@ -116,6 +117,17 @@ pub enum AutomationCurve {
     Linear,
     Exponential,
     Stepped,
+}
+
+#[derive(Clone, Debug)]
+pub struct Binding {
+    pub target_daemon: String,
+    pub target_param: String,
+    pub source: String,
+    pub curve: AutomationCurve,
+    pub from: f64,
+    pub to: f64,
+    pub span: Span,
 }
 
 #[derive(Clone, Debug)]
@@ -486,12 +498,15 @@ impl<'a> Parser<'a> {
         let mut invokes = Vec::new();
         let mut banishes = Vec::new();
         let mut automations = Vec::new();
+        let mut bindings = Vec::new();
         while !self.check(TokenKind::RBrace) {
             if self.check_ident("invoke") {
                 self.advance();
                 invokes.push(self.parse_invoke()?);
             } else if self.check_ident("banish") {
                 banishes.push(self.parse_banish()?);
+            } else if self.check_ident("bind") {
+                bindings.push(self.parse_binding()?);
             } else if self.check_ident("raise") || self.check_ident("lower") {
                 automations.push(self.parse_automation()?);
             } else {
@@ -507,6 +522,7 @@ impl<'a> Parser<'a> {
             invokes,
             banishes,
             automations,
+            bindings,
             span,
         })
     }
@@ -524,15 +540,7 @@ impl<'a> Parser<'a> {
         let to = self.expect_number()?;
         let curve = if self.check_ident("curve") {
             self.advance();
-            match self.expect_ident_any()?.as_str() {
-                "linear" => AutomationCurve::Linear,
-                "exponential" => AutomationCurve::Exponential,
-                "stepped" => AutomationCurve::Stepped,
-                other => bail!(
-                    "{}: unsupported automation curve `{other}`",
-                    self.previous_span()
-                ),
-            }
+            self.parse_automation_curve()?
         } else {
             AutomationCurve::Linear
         };
@@ -557,6 +565,46 @@ impl<'a> Parser<'a> {
             span,
             source_order,
         })
+    }
+
+    fn parse_binding(&mut self) -> Result<Binding> {
+        let span = self.location();
+        self.expect_ident("bind")?;
+        let target_daemon = self.expect_ident_any()?;
+        self.expect(TokenKind::Dot)?;
+        let target_param = self.expect_ident_any()?;
+        self.expect_ident("to")?;
+        let source = self.expect_ident_any()?;
+        let from = self.expect_number()?;
+        self.expect(TokenKind::Arrow)?;
+        let to = self.expect_number()?;
+        let curve = if self.check_ident("curve") {
+            self.advance();
+            self.parse_automation_curve()?
+        } else {
+            AutomationCurve::Linear
+        };
+        Ok(Binding {
+            target_daemon,
+            target_param,
+            source,
+            curve,
+            from,
+            to,
+            span,
+        })
+    }
+
+    fn parse_automation_curve(&mut self) -> Result<AutomationCurve> {
+        match self.expect_ident_any()?.as_str() {
+            "linear" => Ok(AutomationCurve::Linear),
+            "exponential" => Ok(AutomationCurve::Exponential),
+            "stepped" => Ok(AutomationCurve::Stepped),
+            other => bail!(
+                "{}: unsupported automation curve `{other}`",
+                self.previous_span()
+            ),
+        }
     }
 
     fn parse_rite_placement(&mut self) -> Result<RitePlacement> {
@@ -601,6 +649,7 @@ impl<'a> Parser<'a> {
         while !self.check(TokenKind::RBrace)
             && !self.check_ident("invoke")
             && !self.check_ident("banish")
+            && !self.check_ident("bind")
             && !self.check_ident("raise")
             && !self.check_ident("lower")
         {
@@ -854,6 +903,8 @@ fn is_reserved_word(value: &str) -> bool {
             | "bars"
             | "invoke"
             | "banish"
+            | "bind"
+            | "to"
             | "with"
             | "every"
             | "evoke"
@@ -941,7 +992,7 @@ working "Future Syntax" {
   daemon kick = sample "samples/kick.wav"
 
   rite main bars 1 {
-    bind bass.cutoff to tension 180 -> 1200
+    scry bass
   }
 
   evoke wav "renders/future.wav"
@@ -951,7 +1002,7 @@ working "Future Syntax" {
         let error = parse_source(Path::new("fixture.rite"), source)
             .unwrap_err()
             .to_string();
-        assert!(error.contains("expected `invoke`, found `bind`"));
+        assert!(error.contains("expected `invoke`, found `scry`"));
     }
 
     #[test]

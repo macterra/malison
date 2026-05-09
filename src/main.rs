@@ -344,6 +344,12 @@ fn print_ir_diff(left: &ir::Ir, right: &ir::Ir) {
         right.control_events.len(),
         right.control_events.len() as isize - left.control_events.len() as isize
     );
+    println!(
+        "control_bindings: {} -> {} ({:+})",
+        left.control_bindings.len(),
+        right.control_bindings.len(),
+        right.control_bindings.len() as isize - left.control_bindings.len() as isize
+    );
 
     let left_ids = left
         .events
@@ -421,6 +427,7 @@ fn print_scry(compiled: &compiler::CompiledWorking) {
     println!("spells: {}", ir.spells.len());
     println!("rites: {}", ir.rites.len());
     println!("control events: {}", ir.control_events.len());
+    println!("control bindings: {}", ir.control_bindings.len());
     println!("events: {}", ir.events.len());
     for rite in &ir.rites {
         println!(
@@ -455,6 +462,19 @@ fn print_scry(compiled: &compiler::CompiledWorking) {
             println!(
                 "  {:>7.3} control {:<12} {:>4.2} -> {:>4.2}",
                 control.start_beats, control.target, control.from, control.to
+            );
+        }
+        for binding in ir.control_bindings.iter().filter(|binding| {
+            binding.start_beats >= rite.start_beats
+                && binding.start_beats < rite.start_beats + rite.duration_beats
+        }) {
+            println!(
+                "  {:>7.3} bind {:<12} to {:<12} {:>6.2} -> {:>6.2}",
+                binding.start_beats,
+                format!("{}.{}", binding.target_daemon, binding.target_param),
+                binding.source,
+                binding.from,
+                binding.to
             );
         }
     }

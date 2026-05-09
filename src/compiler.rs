@@ -5,8 +5,8 @@ use std::path::{Path, PathBuf};
 use anyhow::{Context, Result, bail};
 
 use crate::ir::{
-    Ir, IrCircle, IrControlEvent, IrDaemon, IrEffect, IrEvent, IrPitch, IrRandomStream,
-    IrRenderTarget, IrRite, IrSource, IrSpell, IrWard,
+    Ir, IrCircle, IrControlBinding, IrControlEvent, IrDaemon, IrEffect, IrEvent, IrPitch,
+    IrRandomStream, IrRenderTarget, IrRite, IrSource, IrSpell, IrWard,
 };
 use crate::parser::{
     AutomationCurve, AutomationDirection, DaemonKind, PatternKind, PatternTransform, RitePlacement,
@@ -113,6 +113,7 @@ pub fn compile_events(
 
     let mut events = Vec::new();
     let mut control_events = Vec::new();
+    let mut control_bindings = Vec::new();
     let mut rites = Vec::new();
     let mut cursor_beats = 0.0;
     let mut occupied_ranges = Vec::<(String, f64, f64)>::new();
@@ -172,6 +173,36 @@ pub fn compile_events(
                 from,
                 to,
                 source: source_for_span(input, automation.span),
+            });
+        }
+
+        for (binding_index, binding) in rite.bindings.iter().enumerate() {
+            validate_control_target(&binding.source, binding.span)?;
+            validate_binding_curve(&binding.curve, binding.from, binding.to, binding.span)?;
+            let daemon = daemon_map
+                .get(binding.target_daemon.as_str())
+                .ok_or_else(|| {
+                    unresolved_name(
+                        "daemon",
+                        &binding.target_daemon,
+                        daemon_map.keys().copied(),
+                        binding.span,
+                    )
+                })?;
+            validate_bound_param(daemon.kind.clone(), binding)?;
+            let (id, semantic_path) = binding_identity(&rite.name, binding_index);
+            control_bindings.push(IrControlBinding {
+                id,
+                semantic_path,
+                source: binding.source.clone(),
+                target_daemon: binding.target_daemon.clone(),
+                target_param: canonical_param_name(&binding.target_param),
+                curve: automation_curve_label(&binding.curve).to_string(),
+                start_beats: rite_start,
+                duration_beats,
+                from: binding.from,
+                to: binding.to,
+                source_location: source_for_span(input, binding.span),
             });
         }
 
@@ -302,6 +333,7 @@ pub fn compile_events(
             .then(a.kind.cmp(&b.kind))
             .then(a.id.cmp(&b.id))
     });
+    apply_control_bindings_to_events(&mut events, &control_events, &control_bindings);
 
     let random_streams = random_streams_for(&working);
     let circles = ir_circles(input, &working);
@@ -361,6 +393,7 @@ pub fn compile_events(
             source: source_for_span(input, working.evoke_span),
         }],
         control_events,
+        control_bindings,
         events,
     };
 
@@ -674,8 +707,38 @@ fn validate_automation_curve(
     to: f64,
     span: crate::lexer::Span,
 ) -> Result<()> {
+    if !(0.0..=1.0).contains(&from) || !(0.0..=1.0).contains(&to) {
+        bail!("{span}: control stream endpoints must be in [0, 1]");
+    }
     if matches!(curve, AutomationCurve::Exponential) && (from <= 0.0 || to <= 0.0) {
         bail!("{span}: exponential automation endpoints must be positive");
+    }
+    Ok(())
+}
+
+fn validate_bound_param(kind: DaemonKind, binding: &crate::parser::Binding) -> Result<()> {
+    let params = [
+        crate::parser::Param {
+            name: binding.target_param.clone(),
+            value: Value::Number(binding.from),
+        },
+        crate::parser::Param {
+            name: binding.target_param.clone(),
+            value: Value::Number(binding.to),
+        },
+    ];
+    validate_params(&binding.target_daemon, kind, &params)
+        .map_err(|error| anyhow::anyhow!("{}: {error}", binding.span))
+}
+
+fn validate_binding_curve(
+    curve: &AutomationCurve,
+    from: f64,
+    to: f64,
+    span: crate::lexer::Span,
+) -> Result<()> {
+    if matches!(curve, AutomationCurve::Exponential) && (from <= 0.0 || to <= 0.0) {
+        bail!("{span}: exponential binding endpoints must be positive");
     }
     Ok(())
 }
@@ -685,6 +748,57 @@ fn automation_curve_label(curve: &AutomationCurve) -> &'static str {
         AutomationCurve::Linear => "linear",
         AutomationCurve::Exponential => "exponential",
         AutomationCurve::Stepped => "stepped",
+    }
+}
+
+fn apply_control_bindings_to_events(
+    events: &mut [IrEvent],
+    controls: &[IrControlEvent],
+    bindings: &[IrControlBinding],
+) {
+    for binding in bindings {
+        for event in events.iter_mut().filter(|event| {
+            event.daemon == binding.target_daemon
+                && event.time_beats >= binding.start_beats
+                && event.time_beats < binding.start_beats + binding.duration_beats
+        }) {
+            if let Some(control_value) = controls
+                .iter()
+                .find(|control| {
+                    control.target == binding.source
+                        && event.time_beats >= control.start_beats
+                        && event.time_beats < control.start_beats + control.duration_beats
+                })
+                .map(|control| control_value_at(control, event.time_beats))
+            {
+                let shaped = shape_control_value(control_value, &binding.curve);
+                let value = binding.from + shaped * (binding.to - binding.from);
+                event
+                    .params
+                    .insert(binding.target_param.clone(), serde_json::json!(value));
+            }
+        }
+    }
+}
+
+fn control_value_at(control: &IrControlEvent, time_beats: f64) -> f64 {
+    let progress = ((time_beats - control.start_beats) / control.duration_beats).clamp(0.0, 1.0);
+    let shaped = shape_control_value(progress, &control.curve);
+    control.from + shaped * (control.to - control.from)
+}
+
+fn shape_control_value(value: f64, curve: &str) -> f64 {
+    let value = value.clamp(0.0, 1.0);
+    match curve {
+        "exponential" => value * value,
+        "stepped" => {
+            if value < 1.0 {
+                0.0
+            } else {
+                1.0
+            }
+        }
+        _ => value,
     }
 }
 
@@ -1459,6 +1573,12 @@ fn control_identity(rite: &str, automation_index: usize) -> (String, String) {
     (id, semantic_path)
 }
 
+fn binding_identity(rite: &str, binding_index: usize) -> (String, String) {
+    let semantic_path = format!("rite:{rite}/binding:{binding_index}");
+    let id = format!("bind_{:016x}", stable_hash(&semantic_path));
+    (id, semantic_path)
+}
+
 fn stable_hash(value: &str) -> u64 {
     let mut hash = 0xcbf29ce484222325_u64;
     for byte in value.as_bytes() {
@@ -1926,6 +2046,7 @@ working "Automation Test" {
   rite main bars 2 {
     invoke kick with hits every 1/16
     raise tension 0.2 -> 0.8 curve exponential
+    bind kick.gain to tension -12 -> -3
   }
 
   evoke wav "renders/test.wav"
@@ -1939,6 +2060,15 @@ working "Automation Test" {
         assert_eq!(compiled.ir.control_events[0].target, "tension");
         assert_eq!(compiled.ir.control_events[0].curve, "exponential");
         assert_eq!(compiled.ir.control_events[0].duration_beats, 8.0);
+        assert_eq!(compiled.ir.control_bindings.len(), 1);
+        assert_eq!(compiled.ir.control_bindings[0].target_param, "gain_db");
+        assert!(compiled.ir.events.iter().any(|event| {
+            event
+                .params
+                .get("gain_db")
+                .and_then(|value| value.as_f64())
+                .is_some_and(|gain| gain < -3.0)
+        }));
 
         fs::remove_dir_all(&root).unwrap();
     }

@@ -302,7 +302,7 @@ Purpose: add the distinctive Malison layer: structural dark-electronic controls 
 
 ### Control Streams
 
-* Implement normalized control streams in `[0, 1]`.
+* Implement normalized control streams in `[0, 1]`. Done for rite-level controls.
 * Add `raise` and `lower` for:
   * `tension`
   * `density`
@@ -310,19 +310,19 @@ Purpose: add the distinctive Malison layer: structural dark-electronic controls 
   * `harshness`
   * `spaciousness`
   * `degradation`
-* Decide local versus global scope inside rites.
+* Decide local versus global scope inside rites. Done; controls and bindings are rite-scoped in `0.1`.
 
 ### Bindings
 
-* Parse `bind target to source from -> to`.
-* Represent bindings as IR control edges.
-* Compile bindings to automation curves.
-* Validate target parameter type and unit compatibility.
+* Parse `bind target to source from -> to`. Done as `bind daemon.param to control from -> to`.
+* Represent bindings as IR control edges. Done with `control_bindings`.
+* Compile bindings to automation curves. Done for discrete event parameters.
+* Validate target parameter type and unit compatibility. Done through daemon parameter schemas.
 
 ### Musical Lowering
 
 * Define default mappings only where they are musically defensible.
-* Prefer explicit bindings over hidden magic.
+* Prefer explicit bindings over hidden magic. Done.
 * Add examples where tension opens filters, raises density, increases drive, and widens reverb.
 
 ### Exit Criteria

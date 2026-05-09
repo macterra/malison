@@ -16,6 +16,7 @@ expression: json
       "wards": []
     }
   ],
+  "control_bindings": [],
   "control_events": [],
   "daemons": [
     {

@@ -40,8 +40,10 @@ Supported rite statements:
 * `banish daemon`
 * `raise tension 0.2 -> 0.8`
 * `lower degradation 0.6 -> 0.1 curve stepped`
+* `bind bass.cutoff to tension 180 -> 1200 curve exponential`
 
 `banish` emits a lifecycle event at the start of its rite and truncates any already-running continuous event for the named daemon. Automation curves may be `linear`, `exponential`, or `stepped`; exponential curves require positive endpoints.
+Bindings map normalized control streams to numeric daemon parameters. For discrete events, the compiler writes the lowered parameter value into matching event parameters.
 
 Common daemon parameters:
 

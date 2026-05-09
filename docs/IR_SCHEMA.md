@@ -27,6 +27,7 @@ The current schema version is `0.1`. Object keys are emitted in stable order, an
   "rites": [],
   "render_targets": [],
   "control_events": [],
+  "control_bindings": [],
   "events": []
 }
 ```
@@ -165,8 +166,6 @@ Render targets represent `evoke` declarations.
 }
 ```
 
-## Events
-
 ## Control Events
 
 Rite automation lowers to inspectable control events.
@@ -190,6 +189,32 @@ Rite automation lowers to inspectable control events.
 ```
 
 `curve` is one of `linear`, `exponential`, or `stepped`. Control event values are normalized aesthetic streams unless a later binding maps them to a concrete parameter.
+
+## Control Bindings
+
+Bindings connect normalized control streams to concrete daemon parameters.
+
+```json
+{
+  "id": "bind_41b9b398b61cf730",
+  "semantic_path": "rite:drop/binding:0",
+  "source": "tension",
+  "target_daemon": "bass",
+  "target_param": "cutoff_hz",
+  "curve": "exponential",
+  "start_beats": 32.0,
+  "duration_beats": 64.0,
+  "from": 180.0,
+  "to": 1200.0,
+  "source_location": {
+    "file": "examples/second-working/main.rite",
+    "line": 31,
+    "column": 5
+  }
+}
+```
+
+For discrete rendered events, the compiler applies bindings by writing the lowered parameter value into each matching event's `params`.
 
 ## Events
 
