@@ -223,6 +223,20 @@ working "Manifest Test" {
 }
 
 #[test]
+fn fmt_check_rejects_unformatted_source() {
+    let fixture = Fixture::new_with_source(&RITE.replace("tempo 128", "tempo    128"));
+
+    Command::cargo_bin("malison")
+        .unwrap()
+        .arg("fmt")
+        .arg(fixture.main_rite())
+        .arg("--check")
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("is not formatted"));
+}
+
+#[test]
 fn render_supercollider_dry_run_outputs_score() {
     let fixture = Fixture::new();
 

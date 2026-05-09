@@ -1,4 +1,5 @@
 mod compiler;
+mod formatter;
 mod ir;
 mod lexer;
 mod manifest;
@@ -36,6 +37,12 @@ enum Command {
     Graph { file: PathBuf },
     /// Inspect event expansion in a human-readable form.
     Scry { file: PathBuf },
+    /// Format a source file in place.
+    Fmt {
+        file: PathBuf,
+        #[arg(long)]
+        check: bool,
+    },
     /// Compile and render audio.
     Render {
         file: PathBuf,
@@ -119,6 +126,22 @@ fn run() -> Result<()> {
         Command::Scry { file } => {
             let compiled = load_and_compile(&file)?;
             print_scry(&compiled);
+            Ok(())
+        }
+        Command::Fmt { file, check } => {
+            let source = fs::read_to_string(&file)
+                .with_context(|| format!("failed to read `{}`", file.display()))?;
+            let formatted = formatter::format_source(&source);
+            if check {
+                if formatted != source {
+                    anyhow::bail!("{} is not formatted", file.display());
+                }
+                return Ok(());
+            }
+            if formatted != source {
+                fs::write(&file, formatted)
+                    .with_context(|| format!("failed to write `{}`", file.display()))?;
+            }
             Ok(())
         }
         Command::Render {

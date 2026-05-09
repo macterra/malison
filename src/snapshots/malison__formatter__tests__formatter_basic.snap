@@ -1,0 +1,17 @@
+---
+source: src/formatter.rs
+assertion_line: 114
+expression: format_source(source)
+---
+language 0.1
+
+working "Fmt Test" {
+  // keep me
+  tempo 120
+  meter 4/4
+  seed "has spaces"
+  rite main bars 1 {
+    invoke kick with hits every 1/16
+    raise tension 0.1 -> 0.9
+  }
+}

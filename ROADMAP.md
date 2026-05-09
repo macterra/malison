@@ -373,10 +373,10 @@ Purpose: make Malison pleasant to write, inspect, and refactor.
 
 ### Formatter
 
-* Implement `malison fmt <file>`.
-* Preserve comments.
-* Normalize spacing around blocks, declarations, and parameters.
-* Add formatting snapshots.
+* Implement `malison fmt <file>`. Done.
+* Preserve comments. Done for line comments and block-comment lines.
+* Normalize spacing around blocks, declarations, and parameters. Done conservatively.
+* Add formatting snapshots. Done.
 
 ### Language Server
 
