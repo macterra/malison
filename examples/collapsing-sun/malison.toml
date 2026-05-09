@@ -1,0 +1,16 @@
+[project]
+name = "collapsing-sun"
+
+# Uses a local shared sample library entry:
+# Source: https://freesound.org/people/LogicMoon/packs/35565/
+# samples/35565__logicmoon__dark-soundscapes/852768__logicmoon__collapsing-sun.wav
+[render]
+backend = "rust"
+sample_rate = 44100
+bit_depth = 24
+
+[paths]
+samples = "samples"
+sample_libraries = ["../../samples"]
+renders = "renders"
+build = "build"
