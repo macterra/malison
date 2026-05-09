@@ -310,6 +310,7 @@ Purpose: add the distinctive Malison layer: structural dark-electronic controls 
   * `harshness`
   * `spaciousness`
   * `degradation`
+  Done.
 * Decide local versus global scope inside rites. Done; controls and bindings are rite-scoped in `0.1`.
 
 ### Bindings
@@ -321,15 +322,15 @@ Purpose: add the distinctive Malison layer: structural dark-electronic controls 
 
 ### Musical Lowering
 
-* Define default mappings only where they are musically defensible.
+* Define default mappings only where they are musically defensible. Done; `0.1` ships no hidden mappings and requires explicit bindings.
 * Prefer explicit bindings over hidden magic. Done.
-* Add examples where tension opens filters, raises density, increases drive, and widens reverb.
+* Add examples where tension opens filters, raises density, increases drive, and widens reverb. Done for explicit filter and drive bindings; reverb widening uses the same binding path once effect-parameter binding targets are promoted beyond daemon params.
 
 ### Exit Criteria
 
 * Aesthetic controls produce inspectable automation, not opaque prompt-like behavior.
-* `scry` can explain which control changed which sound.
-* A demo track uses tension/degradation in a way audible from source.
+* `scry` can explain which control changed which sound. Done.
+* A demo track uses tension/degradation in a way audible from source. Done.
 
 ## Phase 8: Project System And Libraries
 
