@@ -231,7 +231,7 @@ Improve `saw_sub`:
 * detune. Done.
 * sub level. Done.
 * filter resonance. Done.
-* safer anti-aliasing or band-limited oscillator where practical
+* safer anti-aliasing or band-limited oscillator where practical. Done in the Rust backend with polyBLEP saw oscillators for `saw_sub` and `swarm`.
 
 ### Backend Parity
 

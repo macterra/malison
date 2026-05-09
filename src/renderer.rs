@@ -528,10 +528,10 @@ fn render_saw_sub(event: &IrEvent, tempo_bpm: &f64, sample_rate: u32, buffer: &m
         let detune_ratio = 2.0_f32.powf(detune / 1200.0);
         let low_saw_freq = freq / detune_ratio.max(0.001);
         let high_saw_freq = freq * detune_ratio;
-        let saw_low = 2.0 * ((low_saw_freq * t) - (low_saw_freq * t).floor()) - 1.0;
-        let saw_high = 2.0 * ((high_saw_freq * t) - (high_saw_freq * t).floor()) - 1.0;
+        let saw_low = polyblep_saw(low_saw_freq, t, sample_rate as f32);
+        let saw_high = polyblep_saw(high_saw_freq, t, sample_rate as f32);
         let sub_freq = freq * 0.5;
-        let sub = 2.0 * ((sub_freq * t) - (sub_freq * t).floor()) - 1.0;
+        let sub = polyblep_saw(sub_freq, t, sample_rate as f32);
         let saw_level = (1.0 - sub_level).max(0.0);
         let mut value = ((saw_low + saw_high) * 0.5 * saw_level + sub * sub_level) * env;
         if drive > 0.0 {
@@ -630,7 +630,7 @@ fn render_swarm(event: &IrEvent, tempo_bpm: &f64, sample_rate: u32, buffer: &mut
             let center = (voices.saturating_sub(1)) as f32 * 0.5;
             let cents = (voice as f32 - center) * spread;
             let voice_freq = freq * 2.0_f32.powf(cents / 1200.0);
-            value += 2.0 * ((voice_freq * t) - (voice_freq * t).floor()) - 1.0;
+            value += polyblep_saw(voice_freq, t, sample_rate as f32);
         }
         value /= voices as f32;
         let fade = 0.8_f32.min(note_seconds as f32 * 0.5);
@@ -871,6 +871,29 @@ fn adsr(t: f64, note_seconds: f64, attack: f64, decay: f64, sustain: f64, releas
     } else if t < note_seconds + release {
         let progress = (t - note_seconds) / release;
         sustain * (1.0 - progress)
+    } else {
+        0.0
+    }
+}
+
+fn polyblep_saw(freq: f32, t: f32, sample_rate: f32) -> f32 {
+    let phase = (freq * t).fract();
+    let dt = (freq / sample_rate).clamp(0.0, 0.5);
+    let mut value = 2.0 * phase - 1.0;
+    value -= polyblep(phase, dt);
+    value
+}
+
+fn polyblep(phase: f32, dt: f32) -> f32 {
+    if dt <= 0.0 {
+        return 0.0;
+    }
+    if phase < dt {
+        let x = phase / dt;
+        x + x - x * x - 1.0
+    } else if phase > 1.0 - dt {
+        let x = (phase - 1.0) / dt;
+        x * x + x + x + 1.0
     } else {
         0.0
     }
