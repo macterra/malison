@@ -229,6 +229,19 @@ impl<'a> Parser<'a> {
         let kind = match pattern_kind.as_str() {
             "pattern" => PatternKind::Rhythm,
             "notes" => PatternKind::Notes,
+            "euclid" => {
+                self.expect(TokenKind::LParen)?;
+                let pulses = self.expect_u32()?;
+                self.expect(TokenKind::Comma)?;
+                let steps = self.expect_u32()?;
+                self.expect(TokenKind::RParen)?;
+                return Ok(Spell {
+                    name,
+                    kind: PatternKind::Rhythm,
+                    body: format!("euclid({pulses}, {steps})"),
+                    span,
+                });
+            }
             _ => bail!(
                 "{}: unsupported spell pattern `{pattern_kind}`",
                 self.location()

@@ -308,6 +308,10 @@ fn expand_notes(
 }
 
 fn rhythm_steps(body: &str) -> Result<Vec<Option<f64>>> {
+    if let Some((pulses, step_count)) = parse_euclid(body)? {
+        return euclid_steps(pulses, step_count);
+    }
+
     let mut steps = Vec::new();
     for ch in body.chars() {
         match ch {
@@ -322,6 +326,42 @@ fn rhythm_steps(body: &str) -> Result<Vec<Option<f64>>> {
     if steps.is_empty() {
         bail!("rhythm pattern cannot be empty");
     }
+    Ok(steps)
+}
+
+fn parse_euclid(body: &str) -> Result<Option<(u32, u32)>> {
+    let Some(args) = body
+        .strip_prefix("euclid(")
+        .and_then(|value| value.strip_suffix(')'))
+    else {
+        return Ok(None);
+    };
+    let Some((pulses, steps)) = args.split_once(',') else {
+        bail!("euclid rhythm must use `euclid(pulses, steps)`");
+    };
+    Ok(Some((
+        pulses.trim().parse()?,
+        steps.trim().parse()?,
+    )))
+}
+
+fn euclid_steps(pulses: u32, step_count: u32) -> Result<Vec<Option<f64>>> {
+    if step_count == 0 {
+        bail!("euclid rhythm must have at least one step");
+    }
+    if pulses > step_count {
+        bail!("euclid rhythm pulses cannot exceed steps");
+    }
+
+    let steps = (0..step_count)
+        .map(|step| {
+            if pulses > 0 && (step * pulses) % step_count < pulses {
+                Some(1.0)
+            } else {
+                None
+            }
+        })
+        .collect::<Vec<_>>();
     Ok(steps)
 }
 
@@ -659,5 +699,62 @@ working "Velocity Test" {
         assert_eq!(velocities, vec![1.25, 0.45]);
 
         fs::remove_dir_all(&root).unwrap();
+    }
+
+    #[test]
+    fn expands_euclidean_rhythm_spells() {
+        let root =
+            std::env::temp_dir().join(format!("malison-euclid-test-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        fs::create_dir_all(root.join("samples")).unwrap();
+        fs::write(root.join("samples/kick.wav"), b"not really wav").unwrap();
+
+        let source = r#"
+language 0.1
+
+working "Euclid Test" {
+  tempo 120
+  meter 4/4
+  seed "seed"
+
+  daemon kick = sample "samples/kick.wav"
+  spell hits = euclid(3, 8)
+
+  rite main bars 1 {
+    invoke kick with hits every 1/16
+  }
+
+  evoke wav "renders/test.wav"
+}
+"#;
+        let path = root.join("main.rite");
+        fs::write(&path, source).unwrap();
+        let working = parse_source(&path, source).unwrap();
+        let compiled = compile_events(&path, &root, working).unwrap();
+        let times = compiled
+            .ir
+            .events
+            .iter()
+            .map(|event| event.time_beats)
+            .collect::<Vec<_>>();
+        assert_eq!(times, vec![0.0, 0.75, 1.5, 2.0, 2.75, 3.5]);
+
+        fs::remove_dir_all(&root).unwrap();
+    }
+
+    #[test]
+    fn validates_euclidean_rhythm_edges() {
+        assert_eq!(euclid_steps(0, 4).unwrap(), vec![None, None, None, None]);
+        assert_eq!(
+            euclid_steps(4, 4).unwrap(),
+            vec![Some(1.0), Some(1.0), Some(1.0), Some(1.0)]
+        );
+        assert!(euclid_steps(1, 0).unwrap_err().to_string().contains("at least one step"));
+        assert!(
+            euclid_steps(5, 4)
+                .unwrap_err()
+                .to_string()
+                .contains("cannot exceed steps")
+        );
     }
 }
