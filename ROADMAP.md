@@ -141,10 +141,10 @@ Implement deterministic method-chain transforms:
 
 Defer stochastic transforms until random stream identity is settled:
 
-* `.degrade(amount)`
-* `.humanize(amount)`
-* `.mutate(probability)`
-* `.velocity(range)`
+* `.degrade(amount)`. Done.
+* `.humanize(amount)`. Done.
+* `.mutate(probability)`. Done.
+* `.velocity(range)`. Done with `velocity(rand(min, max))`.
 
 ### Euclidean Rhythms
 
@@ -154,10 +154,10 @@ Defer stochastic transforms until random stream identity is settled:
 
 ### Probability And Humanization
 
-* Implement deterministic probability expansion.
-* Implement timing humanization with bounded offsets that never cross rite boundaries unless explicitly allowed.
-* Implement velocity randomization.
-* Add snapshot tests tied to stable seeds.
+* Implement deterministic probability expansion. Done through seeded `.degrade(amount)`.
+* Implement timing humanization with bounded offsets that never cross rite boundaries unless explicitly allowed. Done.
+* Implement velocity randomization. Done.
+* Add snapshot tests tied to stable seeds. Done with deterministic seed regression tests.
 
 ### Exit Criteria
 

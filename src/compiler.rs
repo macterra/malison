@@ -118,6 +118,7 @@ pub fn compile_events(
                                 input,
                                 &mut events,
                                 &rite.name,
+                                &working.seed,
                                 cursor_beats,
                                 duration_beats,
                                 invoke,
@@ -130,6 +131,7 @@ pub fn compile_events(
                                 input,
                                 &mut events,
                                 &rite.name,
+                                &working.seed,
                                 cursor_beats,
                                 duration_beats,
                                 invoke,
@@ -316,6 +318,7 @@ fn expand_rhythm(
     input: &Path,
     events: &mut Vec<IrEvent>,
     rite_name: &str,
+    seed: &str,
     rite_start: f64,
     rite_duration: f64,
     invoke: &crate::parser::Invoke,
@@ -335,14 +338,30 @@ fn expand_rhythm(
         if time >= rite_duration {
             break;
         }
-        if let Some(velocity) = steps[absolute_step % steps.len()] {
-            let (id, semantic_path) =
-                event_identity(rite_name, invoke.source_order, &absolute_step.to_string());
+        let (id, semantic_path) =
+            event_identity(rite_name, invoke.source_order, &absolute_step.to_string());
+        if let Some(mut velocity) = stochastic_rhythm_step(
+            seed,
+            &semantic_path,
+            absolute_step,
+            steps[absolute_step % steps.len()],
+            &spell.transforms,
+        )? {
+            let event_time = humanized_time(
+                seed,
+                &semantic_path,
+                absolute_step,
+                rite_start,
+                time,
+                rite_duration,
+                &spell.transforms,
+            )?;
+            velocity = velocity.clamp(0.0, 4.0);
             events.push(IrEvent {
                 id,
                 semantic_path,
                 kind: "trigger".to_string(),
-                time_beats: rite_start + time,
+                time_beats: event_time,
                 duration_beats: step_duration,
                 daemon: invoke.daemon.clone(),
                 velocity,
@@ -360,6 +379,7 @@ fn expand_notes(
     input: &Path,
     events: &mut Vec<IrEvent>,
     rite_name: &str,
+    seed: &str,
     rite_start: f64,
     rite_duration: f64,
     invoke: &crate::parser::Invoke,
@@ -379,17 +399,33 @@ fn expand_notes(
         if time >= rite_duration {
             break;
         }
-        if let Some(pitch_name) = &steps[absolute_step % steps.len()] {
-            let (id, semantic_path) =
-                event_identity(rite_name, invoke.source_order, &absolute_step.to_string());
+        let (id, semantic_path) =
+            event_identity(rite_name, invoke.source_order, &absolute_step.to_string());
+        if let Some(pitch_name) = stochastic_note_step(
+            seed,
+            &semantic_path,
+            absolute_step,
+            steps[absolute_step % steps.len()].as_ref(),
+            &spell.transforms,
+        )? {
+            let velocity = stochastic_velocity(seed, &semantic_path, absolute_step, 1.0, &spell.transforms)?;
+            let event_time = humanized_time(
+                seed,
+                &semantic_path,
+                absolute_step,
+                rite_start,
+                time,
+                rite_duration,
+                &spell.transforms,
+            )?;
             events.push(IrEvent {
                 id,
                 semantic_path,
                 kind: "note".to_string(),
-                time_beats: rite_start + time,
+                time_beats: event_time,
                 duration_beats: step_duration,
                 daemon: invoke.daemon.clone(),
-                velocity: 1.0,
+                velocity,
                 pitch: Some(IrPitch {
                     name: pitch_name.clone(),
                     midi: pitch_to_midi(pitch_name)?,
@@ -445,6 +481,20 @@ fn apply_transforms<T: Clone>(steps: &mut Vec<T>, transforms: &[PatternTransform
                 bail!("pattern every duration must be positive");
             }
             PatternTransform::Every(_) => {}
+            PatternTransform::Degrade(amount)
+            | PatternTransform::Humanize(amount)
+            | PatternTransform::Mutate(amount)
+                if !(0.0..=1.0).contains(amount) =>
+            {
+                bail!("stochastic pattern transform amounts must be in [0, 1]");
+            }
+            PatternTransform::Degrade(_)
+            | PatternTransform::Humanize(_)
+            | PatternTransform::Mutate(_) => {}
+            PatternTransform::VelocityRange(min, max) if *min < 0.0 || min > max => {
+                bail!("velocity range must be non-negative and ordered");
+            }
+            PatternTransform::VelocityRange(_, _) => {}
         }
     }
     Ok(())
@@ -463,7 +513,108 @@ fn pattern_transform_label(transform: &PatternTransform) -> String {
         PatternTransform::Reverse => "reverse()".to_string(),
         PatternTransform::Repeat(count) => format!("repeat({count})"),
         PatternTransform::Every(duration) => format!("every({})", duration.beats),
+        PatternTransform::Degrade(amount) => format!("degrade({amount})"),
+        PatternTransform::Humanize(amount) => format!("humanize({amount})"),
+        PatternTransform::Mutate(amount) => format!("mutate({amount})"),
+        PatternTransform::VelocityRange(min, max) => format!("velocity(rand({min}, {max}))"),
     }
+}
+
+fn stochastic_rhythm_step(
+    seed: &str,
+    semantic_path: &str,
+    step: usize,
+    value: Option<f64>,
+    transforms: &[PatternTransform],
+) -> Result<Option<f64>> {
+    let mut value = value;
+    for transform in transforms {
+        match transform {
+            PatternTransform::Degrade(amount)
+                if value.is_some() && random_unit(seed, semantic_path, step, "degrade") < *amount =>
+            {
+                value = None;
+            }
+            PatternTransform::Mutate(amount)
+                if random_unit(seed, semantic_path, step, "mutate") < *amount =>
+            {
+                value = if value.is_some() { None } else { Some(1.0) };
+            }
+            _ => {}
+        }
+    }
+    value
+        .map(|velocity| stochastic_velocity(seed, semantic_path, step, velocity, transforms))
+        .transpose()
+}
+
+fn stochastic_note_step<'a>(
+    seed: &str,
+    semantic_path: &str,
+    step: usize,
+    value: Option<&'a String>,
+    transforms: &[PatternTransform],
+) -> Result<Option<&'a String>> {
+    let mut value = value;
+    for transform in transforms {
+        match transform {
+            PatternTransform::Degrade(amount) | PatternTransform::Mutate(amount)
+                if value.is_some()
+                    && random_unit(seed, semantic_path, step, "note_drop") < *amount =>
+            {
+                value = None;
+            }
+            _ => {}
+        }
+    }
+    Ok(value)
+}
+
+fn stochastic_velocity(
+    seed: &str,
+    semantic_path: &str,
+    step: usize,
+    base: f64,
+    transforms: &[PatternTransform],
+) -> Result<f64> {
+    let mut velocity = base;
+    for transform in transforms {
+        if let PatternTransform::VelocityRange(min, max) = transform {
+            if *min < 0.0 || min > max {
+                bail!("velocity range must be non-negative and ordered");
+            }
+            let amount = random_unit(seed, semantic_path, step, "velocity");
+            velocity *= min + (max - min) * amount;
+        }
+    }
+    Ok(velocity)
+}
+
+fn humanized_time(
+    seed: &str,
+    semantic_path: &str,
+    step: usize,
+    rite_start: f64,
+    step_time: f64,
+    rite_duration: f64,
+    transforms: &[PatternTransform],
+) -> Result<f64> {
+    let mut offset = 0.0;
+    for transform in transforms {
+        if let PatternTransform::Humanize(amount) = transform {
+            if !(0.0..=1.0).contains(amount) {
+                bail!("stochastic pattern transform amounts must be in [0, 1]");
+            }
+            let unit = random_unit(seed, semantic_path, step, "humanize");
+            offset += (unit * 2.0 - 1.0) * amount;
+        }
+    }
+    Ok(rite_start + (step_time + offset).clamp(0.0, rite_duration.max(0.0)))
+}
+
+fn random_unit(seed: &str, semantic_path: &str, step: usize, channel: &str) -> f64 {
+    let hash = stable_hash(&format!("{seed}:{semantic_path}:{step}:{channel}"));
+    hash as f64 / u64::MAX as f64
 }
 
 fn parse_euclid(body: &str) -> Result<Option<(u32, u32, i32)>> {
@@ -1037,6 +1188,60 @@ working "Every Test" {
             .map(|event| event.time_beats)
             .collect::<Vec<_>>();
         assert_eq!(times, vec![0.0, 1.0, 2.0, 3.0]);
+
+        fs::remove_dir_all(&root).unwrap();
+    }
+
+    #[test]
+    fn stochastic_transforms_are_seeded_and_bounded() {
+        let root =
+            std::env::temp_dir().join(format!("malison-stochastic-test-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        fs::create_dir_all(root.join("samples")).unwrap();
+        fs::write(root.join("samples/kick.wav"), b"not really wav").unwrap();
+
+        let source = r#"
+language 0.1
+
+working "Stochastic Test" {
+  tempo 120
+  meter 4/4
+  seed "seed"
+
+  daemon kick = sample "samples/kick.wav"
+  spell hits = pattern "xxxx".degrade(0.25).humanize(0.1).velocity(rand(0.5, 0.75))
+
+  rite main bars 1 {
+    invoke kick with hits every 1/4
+  }
+
+  evoke wav "renders/test.wav"
+}
+"#;
+        let path = root.join("main.rite");
+        fs::write(&path, source).unwrap();
+        let working = parse_source(&path, source).unwrap();
+        let compiled = compile_events(&path, &root, working).unwrap();
+        let first_pass = compiled
+            .ir
+            .events
+            .iter()
+            .map(|event| (event.time_beats, event.velocity))
+            .collect::<Vec<_>>();
+        assert!(!first_pass.is_empty());
+        assert!(first_pass
+            .iter()
+            .all(|(time, velocity)| (0.0..=4.0).contains(time) && (0.5..=0.75).contains(velocity)));
+
+        let working = parse_source(&path, source).unwrap();
+        let compiled_again = compile_events(&path, &root, working).unwrap();
+        let second_pass = compiled_again
+            .ir
+            .events
+            .iter()
+            .map(|event| (event.time_beats, event.velocity))
+            .collect::<Vec<_>>();
+        assert_eq!(first_pass, second_pass);
 
         fs::remove_dir_all(&root).unwrap();
     }

@@ -53,6 +53,10 @@ pub enum PatternTransform {
     Reverse,
     Repeat(u32),
     Every(Duration),
+    Degrade(f64),
+    Humanize(f64),
+    Mutate(f64),
+    VelocityRange(f64, f64),
 }
 
 #[derive(Clone, Debug)]
@@ -294,6 +298,18 @@ impl<'a> Parser<'a> {
                 "reverse" => PatternTransform::Reverse,
                 "repeat" => PatternTransform::Repeat(self.expect_u32()?),
                 "every" => PatternTransform::Every(self.parse_duration()?),
+                "degrade" => PatternTransform::Degrade(self.expect_number()?),
+                "humanize" => PatternTransform::Humanize(self.expect_number()?),
+                "mutate" => PatternTransform::Mutate(self.expect_number()?),
+                "velocity" => {
+                    self.expect_ident("rand")?;
+                    self.expect(TokenKind::LParen)?;
+                    let min = self.expect_number()?;
+                    self.expect(TokenKind::Comma)?;
+                    let max = self.expect_number()?;
+                    self.expect(TokenKind::RParen)?;
+                    PatternTransform::VelocityRange(min, max)
+                }
                 _ => bail!("{}: unsupported pattern transform `{name}`", self.previous_span()),
             };
             self.expect(TokenKind::RParen)?;
