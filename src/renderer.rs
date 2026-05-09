@@ -42,6 +42,9 @@ pub fn render_wav(
             "sample" => render_sample(compiled, daemon, event, sample_rate, &mut buffer)?,
             "saw_sub" => render_saw_sub(event, &compiled.ir.tempo_bpm, sample_rate, &mut buffer),
             "drone" => render_drone(event, &compiled.ir.tempo_bpm, sample_rate, &mut buffer),
+            "noise_burst" => render_noise_burst(event, &compiled.ir.tempo_bpm, sample_rate, &mut buffer),
+            "swarm" => render_swarm(event, &compiled.ir.tempo_bpm, sample_rate, &mut buffer),
+            "metal_hit" => render_metal_hit(event, &compiled.ir.tempo_bpm, sample_rate, &mut buffer),
             other => bail!("unsupported daemon kind `{other}`"),
         }
     }
@@ -129,6 +132,9 @@ pub fn supercollider_script(
     score_lines.push("[0.0, [\\d_recv, SynthDef(\\mal_sample, { |out=0, bufnum=0, amp=1, pan=0, rate=1, start=0, dur=999| var sig, env; env = Line.kr(1, 1, dur, doneAction:2); sig = PlayBuf.ar(1, bufnum, BufRateScale.kr(bufnum) * rate, startPos:start); Out.ar(out, Pan2.ar(sig * env * amp, pan)); }).asBytes]]".to_string());
     score_lines.push("[0.0, [\\d_recv, SynthDef(\\mal_saw_sub, { |out=0, freq=55, dur=0.25, amp=0.3, pan=0, cutoff=1200, drive=0| var hold, env, sig, driven; hold = (dur - 0.19).max(0.001); env = EnvGen.kr(Env([0, 1, 0.65, 0.65, 0], [0.01, 0.18, hold, 0.08]), doneAction:2); sig = (Saw.ar(freq) * 0.72) + (Saw.ar(freq * 0.5) * 0.28); sig = RLPF.ar(sig, cutoff.clip(20, 20000), 0.35); driven = (sig * (1 + (drive * 12))).tanh; Out.ar(out, Pan2.ar(driven * env * amp, pan)); }).asBytes]]".to_string());
     score_lines.push("[0.0, [\\d_recv, SynthDef(\\mal_drone, { |out=0, freq=43.65, dur=4, amp=0.18, pan=0, cutoff=900, drive=0| var env, sig, driven; env = EnvGen.kr(Env([0, 1, 1, 0], [0.5, (dur - 1).max(0.1), 0.5]), doneAction:2); sig = (SinOsc.ar(freq) * 0.55) + (Saw.ar(freq * 0.5) * 0.25) + (SinOsc.ar(freq * 1.5) * 0.2); sig = RLPF.ar(sig, cutoff.clip(20, 20000), 0.2); driven = (sig * (1 + (drive * 8))).tanh; Out.ar(out, Pan2.ar(driven * env * amp, pan)); }).asBytes]]".to_string());
+    score_lines.push("[0.0, [\\d_recv, SynthDef(\\mal_noise_burst, { |out=0, dur=0.2, amp=0.3, pan=0, highpass=80, lowpass=9000, drive=0| var env, sig; env = EnvGen.kr(Env.perc(0.002, dur.max(0.01)), doneAction:2); sig = WhiteNoise.ar; sig = HPF.ar(LPF.ar(sig, lowpass.clip(20, 20000)), highpass.clip(20, 20000)); sig = (sig * (1 + (drive * 10))).tanh; Out.ar(out, Pan2.ar(sig * env * amp, pan)); }).asBytes]]".to_string());
+    score_lines.push("[0.0, [\\d_recv, SynthDef(\\mal_swarm, { |out=0, freq=43.65, dur=4, amp=0.15, pan=0, cutoff=1400, drive=0| var env, sig; env = EnvGen.kr(Env([0, 1, 1, 0], [0.8, (dur - 1.6).max(0.1), 0.8]), doneAction:2); sig = Mix.fill(7, { |i| Saw.ar(freq * (1 + ((i - 3) * 0.004))) }) / 7; sig = RLPF.ar(sig, cutoff.clip(20, 20000), 0.25); sig = (sig * (1 + (drive * 8))).tanh; Out.ar(out, Pan2.ar(sig * env * amp, pan)); }).asBytes]]".to_string());
+    score_lines.push("[0.0, [\\d_recv, SynthDef(\\mal_metal_hit, { |out=0, freq=110, decay=1, amp=0.35, pan=0, drive=0| var env, sig; env = EnvGen.kr(Env.perc(0.001, decay.max(0.02)), doneAction:2); sig = SinOsc.ar(freq * 1.0) + SinOsc.ar(freq * 2.71) + SinOsc.ar(freq * 4.39); sig = sig / 3; sig = (sig * (1 + (drive * 12))).tanh; Out.ar(out, Pan2.ar(sig * env * amp, pan)); }).asBytes]]".to_string());
 
     for daemon in &compiled.ir.daemons {
         if daemon.kind == "sample" {
@@ -213,6 +219,52 @@ pub fn supercollider_script(
                     .clamp(0.0, 1.0);
                 score_lines.push(format!(
                     "[{time:.6}, [\\s_new, \\mal_drone, {node_id}, 0, 1, \\freq, {freq:.8}, \\dur, {dur:.8}, \\amp, {amp:.8}, \\pan, {pan:.8}, \\cutoff, {cutoff:.8}, \\drive, {drive:.8}]]"
+                ));
+                node_id += 1;
+            }
+            "noise_burst" => {
+                let dur = beats_to_seconds(event.duration_beats, compiled.ir.tempo_bpm);
+                let amp =
+                    db_to_amp(param_f64(&event.params, "gain_db").unwrap_or(-8.0)) * event.velocity;
+                let pan = param_f64(&event.params, "pan").unwrap_or(0.0).clamp(-1.0, 1.0);
+                let highpass = param_f64(&event.params, "highpass_hz").unwrap_or(80.0);
+                let lowpass = param_f64(&event.params, "lowpass_hz").unwrap_or(9000.0);
+                let drive = param_f64(&event.params, "drive").unwrap_or(0.0).clamp(0.0, 1.0);
+                score_lines.push(format!(
+                    "[{time:.6}, [\\s_new, \\mal_noise_burst, {node_id}, 0, 1, \\dur, {dur:.8}, \\amp, {amp:.8}, \\pan, {pan:.8}, \\highpass, {highpass:.8}, \\lowpass, {lowpass:.8}, \\drive, {drive:.8}]]"
+                ));
+                node_id += 1;
+            }
+            "swarm" => {
+                let freq = event
+                    .pitch
+                    .as_ref()
+                    .map(|pitch| midi_to_freq(pitch.midi))
+                    .unwrap_or_else(|| midi_to_freq(29));
+                let dur = beats_to_seconds(event.duration_beats, compiled.ir.tempo_bpm);
+                let amp =
+                    db_to_amp(param_f64(&event.params, "gain_db").unwrap_or(-16.0)) * event.velocity;
+                let pan = param_f64(&event.params, "pan").unwrap_or(0.0).clamp(-1.0, 1.0);
+                let cutoff = param_f64(&event.params, "cutoff_hz").unwrap_or(1400.0);
+                let drive = param_f64(&event.params, "drive").unwrap_or(0.0).clamp(0.0, 1.0);
+                score_lines.push(format!(
+                    "[{time:.6}, [\\s_new, \\mal_swarm, {node_id}, 0, 1, \\freq, {freq:.8}, \\dur, {dur:.8}, \\amp, {amp:.8}, \\pan, {pan:.8}, \\cutoff, {cutoff:.8}, \\drive, {drive:.8}]]"
+                ));
+                node_id += 1;
+            }
+            "metal_hit" => {
+                let freq = event
+                    .pitch
+                    .as_ref()
+                    .map(|pitch| midi_to_freq(pitch.midi))
+                    .unwrap_or_else(|| midi_to_freq(45));
+                let decay = param_f64(&event.params, "decay_seconds").unwrap_or(1.0);
+                let amp =
+                    db_to_amp(param_f64(&event.params, "gain_db").unwrap_or(-8.0)) * event.velocity;
+                let pan = param_f64(&event.params, "pan").unwrap_or(0.0).clamp(-1.0, 1.0);
+                let drive = param_f64(&event.params, "drive").unwrap_or(0.0).clamp(0.0, 1.0);
+                score_lines.push(format!(
+                    "[{time:.6}, [\\s_new, \\mal_metal_hit, {node_id}, 0, 1, \\freq, {freq:.8}, \\decay, {decay:.8}, \\amp, {amp:.8}, \\pan, {pan:.8}, \\drive, {drive:.8}]]"
                 ));
                 node_id += 1;
             }
@@ -360,6 +412,91 @@ fn render_drone(event: &IrEvent, tempo_bpm: &f64, sample_rate: u32, buffer: &mut
         frames_out.push([value, value]);
     }
 
+    mix_frames(buffer, start, &frames_out, 1.0, pan);
+}
+
+fn render_noise_burst(
+    event: &IrEvent,
+    tempo_bpm: &f64,
+    sample_rate: u32,
+    buffer: &mut [[f32; 2]],
+) {
+    let start = seconds_to_frame(beats_to_seconds(event.time_beats, *tempo_bpm), sample_rate);
+    let seconds = beats_to_seconds(event.duration_beats, *tempo_bpm).max(0.02);
+    let frames = (seconds * sample_rate as f64).ceil() as usize;
+    let gain =
+        (db_to_amp(param_f64(&event.params, "gain_db").unwrap_or(-8.0)) * event.velocity) as f32;
+    let pan = param_f64(&event.params, "pan").unwrap_or(0.0) as f32;
+    let mut state = stable_noise_seed(&event.id);
+    let mut frames_out = Vec::with_capacity(frames);
+    for frame in 0..frames {
+        state = state.wrapping_mul(1664525).wrapping_add(1013904223);
+        let noise = (state as f32 / u32::MAX as f32) * 2.0 - 1.0;
+        let t = frame as f32 / sample_rate as f32;
+        let env = (-t * 18.0).exp();
+        frames_out.push([noise * env * gain, noise * env * gain]);
+    }
+    mix_frames(buffer, start, &frames_out, 1.0, pan);
+}
+
+fn render_swarm(event: &IrEvent, tempo_bpm: &f64, sample_rate: u32, buffer: &mut [[f32; 2]]) {
+    let start = seconds_to_frame(beats_to_seconds(event.time_beats, *tempo_bpm), sample_rate);
+    let note_seconds = beats_to_seconds(event.duration_beats, *tempo_bpm);
+    let frames = ((note_seconds + 0.8) * sample_rate as f64).ceil() as usize;
+    let midi = event.pitch.as_ref().map(|pitch| pitch.midi).unwrap_or(29);
+    let freq = 440.0_f32 * 2.0_f32.powf((midi as f32 - 69.0) / 12.0);
+    let voices = param_f64(&event.params, "voices")
+        .unwrap_or(7.0)
+        .round()
+        .clamp(1.0, 16.0) as usize;
+    let spread = param_f64(&event.params, "spread_cents").unwrap_or(18.0) as f32;
+    let gain =
+        (db_to_amp(param_f64(&event.params, "gain_db").unwrap_or(-16.0)) * event.velocity) as f32;
+    let pan = param_f64(&event.params, "pan").unwrap_or(0.0) as f32;
+    let cutoff = param_f64(&event.params, "cutoff_hz").unwrap_or(1400.0) as f32;
+    let mut lowpass = OnePoleLowpass::new(cutoff, sample_rate as f32);
+    let mut frames_out = Vec::with_capacity(frames);
+    for frame in 0..frames {
+        let t = frame as f32 / sample_rate as f32;
+        let mut value = 0.0;
+        for voice in 0..voices {
+            let center = (voices.saturating_sub(1)) as f32 * 0.5;
+            let cents = (voice as f32 - center) * spread;
+            let voice_freq = freq * 2.0_f32.powf(cents / 1200.0);
+            value += 2.0 * ((voice_freq * t) - (voice_freq * t).floor()) - 1.0;
+        }
+        value /= voices as f32;
+        let fade = 0.8_f32.min(note_seconds as f32 * 0.5);
+        let env = (t / fade.max(0.001))
+            .min(1.0)
+            .min(((note_seconds as f32 - t) / fade.max(0.001)).clamp(0.0, 1.0));
+        value = lowpass.process(value * env) * gain;
+        frames_out.push([value, value]);
+    }
+    mix_frames(buffer, start, &frames_out, 1.0, pan);
+}
+
+fn render_metal_hit(event: &IrEvent, tempo_bpm: &f64, sample_rate: u32, buffer: &mut [[f32; 2]]) {
+    let start = seconds_to_frame(beats_to_seconds(event.time_beats, *tempo_bpm), sample_rate);
+    let decay = param_f64(&event.params, "decay_seconds").unwrap_or(1.0).max(0.02);
+    let frames = (decay * sample_rate as f64).ceil() as usize;
+    let midi = event.pitch.as_ref().map(|pitch| pitch.midi).unwrap_or(45);
+    let freq = 440.0_f32 * 2.0_f32.powf((midi as f32 - 69.0) / 12.0);
+    let gain =
+        (db_to_amp(param_f64(&event.params, "gain_db").unwrap_or(-8.0)) * event.velocity) as f32;
+    let pan = param_f64(&event.params, "pan").unwrap_or(0.0) as f32;
+    let mut frames_out = Vec::with_capacity(frames);
+    for frame in 0..frames {
+        let t = frame as f32 / sample_rate as f32;
+        let env = (-t / decay as f32 * 8.0).exp();
+        let value = ((2.0 * PI * freq * t).sin()
+            + (2.0 * PI * freq * 2.71 * t).sin()
+            + (2.0 * PI * freq * 4.39 * t).sin())
+            / 3.0
+            * env
+            * gain;
+        frames_out.push([value, value]);
+    }
     mix_frames(buffer, start, &frames_out, 1.0, pan);
 }
 
@@ -527,6 +664,15 @@ fn db_to_amp(db: f64) -> f64 {
 
 fn midi_to_freq(midi: i32) -> f64 {
     440.0 * 2.0_f64.powf((midi as f64 - 69.0) / 12.0)
+}
+
+fn stable_noise_seed(value: &str) -> u32 {
+    let mut hash = 0x811c9dc5_u32;
+    for byte in value.as_bytes() {
+        hash ^= *byte as u32;
+        hash = hash.wrapping_mul(0x01000193);
+    }
+    hash
 }
 
 fn sc_sample_format(bit_depth: u16) -> Result<&'static str> {
@@ -715,6 +861,55 @@ working "Stereo Sample Test" {
             .collect::<Result<Vec<_>, _>>()
             .unwrap();
         assert!(samples.chunks(2).any(|frame| frame[0] != frame[1]));
+
+        fs::remove_dir_all(&root).unwrap();
+    }
+
+    #[test]
+    fn renders_builtin_synth_archetypes() {
+        let root =
+            std::env::temp_dir().join(format!("malison-archetype-test-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        fs::create_dir_all(root.join("samples")).unwrap();
+        fs::write(
+            root.join("malison.toml"),
+            "[project]\nname = \"archetype-test\"\n",
+        )
+        .unwrap();
+
+        let source = r#"
+language 0.1
+
+working "Archetype Test" {
+  tempo 120
+  meter 4/4
+  seed "seed"
+
+  daemon noise = noise_burst { gain -12 highpass 200 lowpass 8000 }
+  daemon swarmy = swarm { root F1 gain -20 voices 5 spread 12 cutoff 900 }
+  daemon metal = metal_hit { root C2 decay 0.6 gain -10 }
+  spell hits = pattern "x---"
+  spell swarm_notes = notes "F1 -"
+
+  rite main bars 1 {
+    invoke noise with hits every 1/16
+    invoke swarmy with swarm_notes every 1/4
+    invoke metal with hits every 1/8
+  }
+
+  evoke wav "renders/test.wav"
+}
+"#;
+        let path = root.join("main.rite");
+        fs::write(&path, source).unwrap();
+        let working = parse_source(&path, source).unwrap();
+        let project_root = project_root_for(&path).unwrap();
+        let compiled = compile_events(&path, &project_root, working).unwrap();
+        let out = root.join("renders/test.wav");
+        render_wav(&compiled, &out, 48_000, 24).unwrap();
+
+        let reader = hound::WavReader::open(out).unwrap();
+        assert_eq!(reader.spec().channels, 2);
 
         fs::remove_dir_all(&root).unwrap();
     }

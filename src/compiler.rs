@@ -161,7 +161,10 @@ pub fn compile_events(
                         unresolved_name("spell", spell_name, spell_map.keys().copied(), invoke.span)
                     })?;
                     match (&daemon.kind, &spell.kind) {
-                        (DaemonKind::Sample, PatternKind::Rhythm) => {
+                        (
+                            DaemonKind::Sample | DaemonKind::NoiseBurst | DaemonKind::MetalHit,
+                            PatternKind::Rhythm,
+                        ) => {
                             expand_rhythm(
                                 input,
                                 &mut events,
@@ -174,7 +177,7 @@ pub fn compile_events(
                                 &params,
                             )?;
                         }
-                        (DaemonKind::SawSub, PatternKind::Notes) => {
+                        (DaemonKind::SawSub | DaemonKind::Swarm, PatternKind::Notes) => {
                             expand_notes(
                                 input,
                                 &mut events,
@@ -203,10 +206,11 @@ pub fn compile_events(
                         kind: match daemon.kind {
                             DaemonKind::Sample => "trigger".to_string(),
                             DaemonKind::SawSub => "note".to_string(),
-                            DaemonKind::Drone => "continuous".to_string(),
+                            DaemonKind::Drone | DaemonKind::Swarm => "continuous".to_string(),
+                            DaemonKind::NoiseBurst | DaemonKind::MetalHit => "trigger".to_string(),
                         },
                         time_beats: rite_start,
-                        duration_beats: if daemon.kind == DaemonKind::Drone {
+                        duration_beats: if matches!(daemon.kind, DaemonKind::Drone | DaemonKind::Swarm) {
                             duration_beats
                         } else {
                             invoke.every.map(|duration| duration.beats).unwrap_or(0.25)
@@ -252,6 +256,9 @@ pub fn compile_events(
                     DaemonKind::Sample => "sample".to_string(),
                     DaemonKind::SawSub => "saw_sub".to_string(),
                     DaemonKind::Drone => "drone".to_string(),
+                    DaemonKind::NoiseBurst => "noise_burst".to_string(),
+                    DaemonKind::Swarm => "swarm".to_string(),
+                    DaemonKind::MetalHit => "metal_hit".to_string(),
                 },
                 sample: daemon.sample_path.clone(),
                 params: merged_params(&daemon.params, &[]),
@@ -353,7 +360,10 @@ fn validate_invokes(
                 if !matches!(
                     (&daemon.kind, &spell.kind),
                     (DaemonKind::Sample, PatternKind::Rhythm)
+                        | (DaemonKind::NoiseBurst, PatternKind::Rhythm)
+                        | (DaemonKind::MetalHit, PatternKind::Rhythm)
                         | (DaemonKind::SawSub, PatternKind::Notes)
+                        | (DaemonKind::Swarm, PatternKind::Notes)
                 ) {
                     errors.push(format!(
                         "{}: daemon `{}` cannot be invoked with spell `{spell_name}`",
@@ -893,6 +903,18 @@ fn validate_params(owner: &str, kind: DaemonKind, params: &[crate::parser::Param
             DaemonKind::Drone => {
                 matches!(param.name.as_str(), "gain" | "pan" | "cutoff" | "drive" | "root")
             }
+            DaemonKind::NoiseBurst => {
+                matches!(param.name.as_str(), "gain" | "pan" | "highpass" | "lowpass" | "drive")
+            }
+            DaemonKind::Swarm => {
+                matches!(
+                    param.name.as_str(),
+                    "gain" | "pan" | "cutoff" | "drive" | "root" | "voices" | "spread"
+                )
+            }
+            DaemonKind::MetalHit => {
+                matches!(param.name.as_str(), "gain" | "pan" | "root" | "drive" | "decay")
+            }
         };
         if !allowed {
             bail!("`{}` does not support parameter `{}`", owner, param.name);
@@ -921,6 +943,12 @@ fn validate_param_value(owner: &str, name: &str, value: &Value) -> Result<()> {
             bail!("`{owner}` parameter `drive` must be in [0, 1]");
         }
         "cutoff" | "highpass" | "lowpass" if number <= 0.0 => {
+            bail!("`{owner}` parameter `{name}` must be positive");
+        }
+        "voices" if number < 1.0 || number.fract() != 0.0 => {
+            bail!("`{owner}` parameter `voices` must be a positive integer");
+        }
+        "spread" | "decay" if number <= 0.0 => {
             bail!("`{owner}` parameter `{name}` must be positive");
         }
         "start" | "end" if number < 0.0 => {
@@ -964,6 +992,8 @@ fn canonical_param_name(name: &str) -> String {
         "start" => "start_seconds",
         "end" => "end_seconds",
         "tune" => "tune_semitones",
+        "spread" => "spread_cents",
+        "decay" => "decay_seconds",
         other => other,
     }
     .to_string()

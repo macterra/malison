@@ -220,10 +220,10 @@ Purpose: make the sonic palette worth composing with.
 
 Implement the next smallest useful archetypes:
 
-* `noise_burst`
+* `noise_burst`. Done in Rust and SC backends.
 * `drone`. Done as a continuous built-in source in Rust and SC backends.
-* `swarm`
-* `metal_hit`
+* `swarm`. Done in Rust and SC backends.
+* `metal_hit`. Done in Rust and SC backends.
 
 Improve `saw_sub`:
 

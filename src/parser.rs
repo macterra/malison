@@ -31,6 +31,9 @@ pub enum DaemonKind {
     Sample,
     SawSub,
     Drone,
+    NoiseBurst,
+    Swarm,
+    MetalHit,
 }
 
 #[derive(Clone, Debug)]
@@ -233,6 +236,9 @@ impl<'a> Parser<'a> {
             "sample" => DaemonKind::Sample,
             "saw_sub" => DaemonKind::SawSub,
             "drone" => DaemonKind::Drone,
+            "noise_burst" => DaemonKind::NoiseBurst,
+            "swarm" => DaemonKind::Swarm,
+            "metal_hit" => DaemonKind::MetalHit,
             _ => bail!("{}: unsupported daemon kind `{kind_name}`", self.location()),
         };
         let sample_path = if kind == DaemonKind::Sample {
