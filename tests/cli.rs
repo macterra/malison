@@ -353,6 +353,24 @@ fn suggests_nearby_daemon_name() {
 }
 
 #[test]
+fn span_errors_include_source_snippets() {
+    let fixture = Fixture::new_with_source(&RITE.replace(
+        "invoke bass with bassline every 1/8",
+        "invoke basss with bassline every 1/8",
+    ));
+
+    Command::cargo_bin("malison")
+        .unwrap()
+        .arg("check")
+        .arg(fixture.main_rite())
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("-->"))
+        .stderr(predicate::str::contains("invoke basss with bassline"))
+        .stderr(predicate::str::contains("|     ^"));
+}
+
+#[test]
 fn suggests_nearby_spell_name() {
     let fixture = Fixture::new_with_source(&RITE.replace(
         "invoke bass with bassline every 1/8",

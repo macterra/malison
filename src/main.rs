@@ -168,9 +168,34 @@ fn load_and_compile(path: &Path) -> Result<compiler::CompiledWorking> {
     }
     let source =
         fs::read_to_string(path).with_context(|| format!("failed to read `{}`", path.display()))?;
-    let working = parse_source(path, &source)?;
+    let working =
+        parse_source(path, &source).map_err(|error| with_source_snippet(path, &source, error))?;
     let project_root = project_root_for(path)?;
     compile_events(path, &project_root, working)
+        .map_err(|error| with_source_snippet(path, &source, error))
+}
+
+fn with_source_snippet(path: &Path, source: &str, error: anyhow::Error) -> anyhow::Error {
+    let message = error.to_string();
+    let Some((line, column)) = parse_leading_span(&message) else {
+        return error;
+    };
+    let Some(source_line) = source.lines().nth(line.saturating_sub(1)) else {
+        return error;
+    };
+    let line_number = line.to_string();
+    let gutter = " ".repeat(line_number.len());
+    anyhow::anyhow!(
+        "{message}\n--> {}:{line}:{column}\n{line_number} | {source_line}\n{gutter} | {}^",
+        path.display(),
+        " ".repeat(column.saturating_sub(1))
+    )
+}
+
+fn parse_leading_span(message: &str) -> Option<(usize, usize)> {
+    let (line, rest) = message.split_once(':')?;
+    let (column, _) = rest.split_once(':')?;
+    Some((line.parse().ok()?, column.parse().ok()?))
 }
 
 fn print_scry(compiled: &compiler::CompiledWorking) {
