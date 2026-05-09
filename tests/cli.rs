@@ -405,6 +405,30 @@ fn suggests_nearby_spell_name() {
 }
 
 #[test]
+fn reports_multiple_invoke_errors_in_one_pass() {
+    let fixture = Fixture::new_with_source(
+        &RITE
+            .replace(
+                "invoke kick with kicks every 1/16",
+                "invoke kik with kicks every 1/16",
+            )
+            .replace(
+                "invoke bass with bassline every 1/8",
+                "invoke bass with basslin every 1/8",
+            ),
+    );
+
+    Command::cargo_bin("malison")
+        .unwrap()
+        .arg("check")
+        .arg(fixture.main_rite())
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("unresolved daemon `kik`"))
+        .stderr(predicate::str::contains("unresolved spell `basslin`"));
+}
+
+#[test]
 fn rejects_output_parent_that_is_file() {
     let fixture = Fixture::new();
     let bad_parent = fixture.root.path().join("not-a-dir");

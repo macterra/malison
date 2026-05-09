@@ -68,6 +68,8 @@ pub fn compile_events(
         validate_params(&daemon.name, daemon.kind.clone(), &daemon.params)?;
     }
 
+    validate_invokes(&working, &daemon_map, &spell_map)?;
+
     let mut events = Vec::new();
     let mut rites = Vec::new();
     let mut cursor_beats = 0.0;
@@ -224,6 +226,62 @@ pub fn compile_events(
         project_root: project_root.to_path_buf(),
         ir,
     })
+}
+
+fn validate_invokes(
+    working: &Working,
+    daemon_map: &BTreeMap<&str, &crate::parser::Daemon>,
+    spell_map: &BTreeMap<&str, &crate::parser::Spell>,
+) -> Result<()> {
+    let mut errors = Vec::new();
+    for rite in &working.rites {
+        for invoke in &rite.invokes {
+            if let Some(every) = invoke.every
+                && every.beats <= 0.0
+            {
+                errors.push(format!("{}: `every` duration must be positive", invoke.span));
+            }
+            let Some(daemon) = daemon_map.get(invoke.daemon.as_str()) else {
+                errors.push(
+                    unresolved_name(
+                        "daemon",
+                        &invoke.daemon,
+                        daemon_map.keys().copied(),
+                        invoke.span,
+                    )
+                    .to_string(),
+                );
+                continue;
+            };
+            if let Err(error) = validate_params(&invoke.daemon, daemon.kind.clone(), &invoke.params)
+            {
+                errors.push(format!("{}: {error}", invoke.span));
+            }
+            if let Some(spell_name) = &invoke.spell {
+                let Some(spell) = spell_map.get(spell_name.as_str()) else {
+                    errors.push(
+                        unresolved_name("spell", spell_name, spell_map.keys().copied(), invoke.span)
+                            .to_string(),
+                    );
+                    continue;
+                };
+                if !matches!(
+                    (&daemon.kind, &spell.kind),
+                    (DaemonKind::Sample, PatternKind::Rhythm)
+                        | (DaemonKind::SawSub, PatternKind::Notes)
+                ) {
+                    errors.push(format!(
+                        "{}: daemon `{}` cannot be invoked with spell `{spell_name}`",
+                        invoke.span, invoke.daemon
+                    ));
+                }
+            }
+        }
+    }
+    if !errors.is_empty() {
+        bail!("{}", errors.join("\n"));
+    }
+    Ok(())
 }
 
 fn expand_rhythm(

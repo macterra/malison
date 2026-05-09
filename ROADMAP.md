@@ -50,7 +50,7 @@ Purpose: turn the current hand-rolled parser into a reliable compiler frontend w
 * Decide whether to keep the hand-rolled parser or move to `logos` plus `chumsky`/`lalrpop`. Done; keep the hand-rolled parser through `0.1` while the grammar is small.
 * Formalize token tests for comments, strings, escapes, fractions, pitches, identifiers, and reserved words. Done for the current token set; fractions are parser-level duration syntax.
 * Reject all reserved future syntax with clear diagnostics. In progress; reserved rite-body syntax and reserved declaration names are rejected.
-* Improve recovery so one bad declaration does not hide every later error.
+* Improve recovery so one bad declaration does not hide every later error. Done for invoke semantic validation; parser recovery remains intentionally minimal for `0.1`.
 * Parse quoted rite names in all places the spec allows. Done for rite declarations.
 * Add source spans to declarations, not only invocations. Done for daemons, spells, rites, and render targets.
 
