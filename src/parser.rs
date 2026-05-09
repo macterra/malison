@@ -63,8 +63,16 @@ pub enum PatternTransform {
 pub struct Rite {
     pub name: String,
     pub bars: u32,
+    pub placement: Option<RitePlacement>,
+    pub layer: bool,
     pub invokes: Vec<Invoke>,
     pub span: Span,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub enum RitePlacement {
+    Bar(u32),
+    Seconds(f64),
 }
 
 #[derive(Clone, Debug)]
@@ -325,8 +333,20 @@ impl<'a> Parser<'a> {
             Some(TokenKind::String(_)) => self.expect_string()?,
             _ => bail!("{}: expected rite name", self.location()),
         };
+        let placement = if self.check_ident("at") {
+            self.advance();
+            Some(self.parse_rite_placement()?)
+        } else {
+            None
+        };
         self.expect_ident("bars")?;
         let bars = self.expect_u32()?;
+        let layer = if self.check_ident("layer") {
+            self.advance();
+            true
+        } else {
+            false
+        };
         self.expect(TokenKind::LBrace)?;
         let mut invokes = Vec::new();
         while !self.check(TokenKind::RBrace) {
@@ -337,9 +357,31 @@ impl<'a> Parser<'a> {
         Ok(Rite {
             name,
             bars,
+            placement,
+            layer,
             invokes,
             span,
         })
+    }
+
+    fn parse_rite_placement(&mut self) -> Result<RitePlacement> {
+        if self.check_ident("bar") {
+            self.advance();
+            return Ok(RitePlacement::Bar(self.expect_u32()?));
+        }
+        let first = self.expect_number()?;
+        if self.check(TokenKind::Colon) {
+            self.advance();
+            let seconds = self.expect_number()?;
+            if first.fract() != 0.0 || seconds.fract() != 0.0 || seconds >= 60.0 {
+                bail!("{}: expected time placement as minutes:seconds", self.previous_span());
+            }
+            return Ok(RitePlacement::Seconds(first * 60.0 + seconds));
+        }
+        bail!(
+            "{}: expected rite placement as `bar N` or `M:S`",
+            self.previous_span()
+        )
     }
 
     fn parse_invoke(&mut self) -> Result<Invoke> {

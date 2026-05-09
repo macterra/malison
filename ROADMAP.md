@@ -171,13 +171,15 @@ Purpose: move beyond one repeating section while keeping the model inspectable.
 
 ### Rites
 
-* Support multiple ordered rites in examples and tests.
+* Support multiple ordered rites in examples and tests. Done in compiler tests.
 * Add explicit placement:
   * `rite drop at bar 17 bars 32`
   * `rite reprise at 2:15 bars 16`
-* Reject overlaps by default.
+  Done.
+* Reject overlaps by default. Done.
 * Add explicit layered rites:
   * `rite drone_layer at bar 1 bars 64 layer`
+  Done.
 
 ### Invocation Lifecycle
 

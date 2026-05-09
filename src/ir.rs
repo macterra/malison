@@ -43,6 +43,7 @@ pub struct IrRite {
     pub id: String,
     pub start_beats: f64,
     pub duration_beats: f64,
+    pub layer: bool,
     pub source: IrSource,
 }
 

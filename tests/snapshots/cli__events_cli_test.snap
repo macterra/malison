@@ -230,6 +230,7 @@ expression: json
     {
       "duration_beats": 4.0,
       "id": "main",
+      "layer": false,
       "source": {
         "column": 3,
         "file": "<fixture>/main.rite",

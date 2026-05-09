@@ -7,7 +7,7 @@ use anyhow::{Context, Result, bail};
 use crate::ir::{
     Ir, IrDaemon, IrEvent, IrPitch, IrRandomStream, IrRenderTarget, IrRite, IrSource, IrSpell,
 };
-use crate::parser::{DaemonKind, PatternKind, PatternTransform, Value, Working};
+use crate::parser::{DaemonKind, PatternKind, PatternTransform, RitePlacement, Value, Working};
 
 #[derive(Clone, Debug)]
 pub struct CompiledWorking {
@@ -75,6 +75,7 @@ pub fn compile_events(
     let mut events = Vec::new();
     let mut rites = Vec::new();
     let mut cursor_beats = 0.0;
+    let mut occupied_ranges = Vec::<(String, f64, f64)>::new();
     for rite in &working.rites {
         if rite.bars == 0 {
             bail!("rite `{}` must have a positive bar count", rite.name);
@@ -83,10 +84,33 @@ pub fn compile_events(
             bail!("rite `{}` must contain at least one invoke", rite.name);
         }
         let duration_beats = rite.bars as f64 * working.meter.0 as f64;
+        let rite_start = match rite.placement {
+            Some(RitePlacement::Bar(bar)) => {
+                if bar == 0 {
+                    bail!("rite `{}` cannot start at bar 0", rite.name);
+                }
+                (bar - 1) as f64 * working.meter.0 as f64
+            }
+            Some(RitePlacement::Seconds(seconds)) => seconds * working.tempo_bpm / 60.0,
+            None => cursor_beats,
+        };
+        if !rite.layer {
+            for (other, start, end) in &occupied_ranges {
+                if ranges_overlap(rite_start, rite_start + duration_beats, *start, *end) {
+                    bail!(
+                        "{}: rite `{}` overlaps rite `{other}`; add `layer` to allow overlap",
+                        rite.span,
+                        rite.name
+                    );
+                }
+            }
+            occupied_ranges.push((rite.name.clone(), rite_start, rite_start + duration_beats));
+        }
         rites.push(IrRite {
             id: rite.name.clone(),
-            start_beats: cursor_beats,
+            start_beats: rite_start,
             duration_beats,
+            layer: rite.layer,
             source: source_for_span(input, rite.span),
         });
 
@@ -119,7 +143,7 @@ pub fn compile_events(
                                 &mut events,
                                 &rite.name,
                                 &working.seed,
-                                cursor_beats,
+                                rite_start,
                                 duration_beats,
                                 invoke,
                                 spell,
@@ -132,7 +156,7 @@ pub fn compile_events(
                                 &mut events,
                                 &rite.name,
                                 &working.seed,
-                                cursor_beats,
+                                rite_start,
                                 duration_beats,
                                 invoke,
                                 spell,
@@ -156,7 +180,7 @@ pub fn compile_events(
                             DaemonKind::Sample => "trigger".to_string(),
                             DaemonKind::SawSub => "note".to_string(),
                         },
-                        time_beats: cursor_beats,
+                        time_beats: rite_start,
                         duration_beats: invoke.every.map(|duration| duration.beats).unwrap_or(0.25),
                         daemon: invoke.daemon.clone(),
                         velocity: 1.0,
@@ -168,7 +192,7 @@ pub fn compile_events(
                 }
             }
         }
-        cursor_beats += duration_beats;
+        cursor_beats = cursor_beats.max(rite_start + duration_beats);
     }
 
     events.sort_by(|a, b| {
@@ -312,6 +336,10 @@ fn validate_invokes(
         bail!("{}", errors.join("\n"));
     }
     Ok(())
+}
+
+fn ranges_overlap(left_start: f64, left_end: f64, right_start: f64, right_end: f64) -> bool {
+    left_start < right_end && right_start < left_end
 }
 
 fn expand_rhythm(
@@ -1242,6 +1270,62 @@ working "Stochastic Test" {
             .map(|event| (event.time_beats, event.velocity))
             .collect::<Vec<_>>();
         assert_eq!(first_pass, second_pass);
+
+        fs::remove_dir_all(&root).unwrap();
+    }
+
+    #[test]
+    fn schedules_explicit_rites_and_rejects_overlaps() {
+        let root =
+            std::env::temp_dir().join(format!("malison-arrangement-test-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        fs::create_dir_all(root.join("samples")).unwrap();
+        fs::write(root.join("samples/kick.wav"), b"not really wav").unwrap();
+
+        let source = r#"
+language 0.1
+
+working "Arrangement Test" {
+  tempo 120
+  meter 4/4
+  seed "seed"
+
+  daemon kick = sample "samples/kick.wav"
+  spell hits = pattern "x---"
+
+  rite intro bars 1 {
+    invoke kick with hits every 1/16
+  }
+
+  rite drop at bar 3 bars 1 {
+    invoke kick with hits every 1/16
+  }
+
+  rite texture at 0:02 bars 1 layer {
+    invoke kick with hits every 1/16
+  }
+
+  evoke wav "renders/test.wav"
+}
+"#;
+        let path = root.join("main.rite");
+        fs::write(&path, source).unwrap();
+        let working = parse_source(&path, source).unwrap();
+        let compiled = compile_events(&path, &root, working).unwrap();
+        let starts = compiled
+            .ir
+            .rites
+            .iter()
+            .map(|rite| rite.start_beats)
+            .collect::<Vec<_>>();
+        assert_eq!(starts, vec![0.0, 8.0, 4.0]);
+        assert!(compiled.ir.rites[2].layer);
+
+        let overlapping = source.replace("rite drop at bar 3", "rite drop at bar 1");
+        fs::write(&path, &overlapping).unwrap();
+        let working = parse_source(&path, &overlapping).unwrap();
+        let error = compile_events(&path, &root, working).unwrap_err().to_string();
+        assert!(error.contains("overlaps rite `intro`"));
 
         fs::remove_dir_all(&root).unwrap();
     }

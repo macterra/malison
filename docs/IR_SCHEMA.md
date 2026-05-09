@@ -92,6 +92,7 @@ Rites are ordered arrangement sections measured in beats.
   "id": "main",
   "start_beats": 0.0,
   "duration_beats": 4.0,
+  "layer": false,
   "source": {
     "file": "examples/first-working/main.rite",
     "line": 19,
