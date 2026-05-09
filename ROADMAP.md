@@ -125,9 +125,9 @@ Purpose: make tracks more musical without adding routing or synthesis complexity
 
 ### Rhythm Patterns
 
-* Add accented events: `X`.
-* Add ghost notes: `g`.
-* Add per-step velocity lowering/raising in IR.
+* Add accented events: `X`. Done.
+* Add ghost notes: `g`. Done.
+* Add per-step velocity lowering/raising in IR. Done for rhythm patterns.
 * Add ties or continuations only after note duration semantics are clear.
 
 ### Pattern Transforms

@@ -152,6 +152,7 @@ pub fn compile_events(
                         time_beats: cursor_beats,
                         duration_beats: invoke.every.map(|duration| duration.beats).unwrap_or(0.25),
                         daemon: invoke.daemon.clone(),
+                        velocity: 1.0,
                         pitch: None,
                         params,
                         source: source_for(input, invoke),
@@ -233,7 +234,7 @@ fn expand_rhythm(
         if time >= rite_duration {
             break;
         }
-        if steps[absolute_step % steps.len()] {
+        if let Some(velocity) = steps[absolute_step % steps.len()] {
             let (id, semantic_path) =
                 event_identity(rite_name, invoke.source_order, &absolute_step.to_string());
             events.push(IrEvent {
@@ -243,6 +244,7 @@ fn expand_rhythm(
                 time_beats: rite_start + time,
                 duration_beats: step_duration,
                 daemon: invoke.daemon.clone(),
+                velocity,
                 pitch: None,
                 params: params.clone(),
                 source: source_for(input, invoke),
@@ -281,6 +283,7 @@ fn expand_notes(
                 time_beats: rite_start + time,
                 duration_beats: step_duration,
                 daemon: invoke.daemon.clone(),
+                velocity: 1.0,
                 pitch: Some(IrPitch {
                     name: pitch_name.clone(),
                     midi: pitch_to_midi(pitch_name)?,
@@ -294,12 +297,14 @@ fn expand_notes(
     Ok(())
 }
 
-fn rhythm_steps(body: &str) -> Result<Vec<bool>> {
+fn rhythm_steps(body: &str) -> Result<Vec<Option<f64>>> {
     let mut steps = Vec::new();
     for ch in body.chars() {
         match ch {
-            'x' => steps.push(true),
-            '-' => steps.push(false),
+            'x' => steps.push(Some(1.0)),
+            'X' => steps.push(Some(1.25)),
+            'g' => steps.push(Some(0.45)),
+            '-' => steps.push(None),
             ' ' => {}
             other => bail!("unsupported rhythm pattern character `{other}`"),
         }
@@ -596,6 +601,48 @@ working "Test" {
             .count();
         assert_eq!(triggers, 4);
         assert_eq!(notes, 4);
+
+        fs::remove_dir_all(&root).unwrap();
+    }
+
+    #[test]
+    fn expands_rhythm_accents_and_ghosts_to_velocity() {
+        let root =
+            std::env::temp_dir().join(format!("malison-velocity-test-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        fs::create_dir_all(root.join("samples")).unwrap();
+        fs::write(root.join("samples/kick.wav"), b"not really wav").unwrap();
+
+        let source = r#"
+language 0.1
+
+working "Velocity Test" {
+  tempo 120
+  meter 4/4
+  seed "seed"
+
+  daemon kick = sample "samples/kick.wav"
+  spell kicks = pattern "Xg--"
+
+  rite main bars 1 {
+    invoke kick with kicks every 1/16
+  }
+
+  evoke wav "renders/test.wav"
+}
+"#;
+        let path = root.join("main.rite");
+        fs::write(&path, source).unwrap();
+        let working = parse_source(&path, source).unwrap();
+        let compiled = compile_events(&path, &root, working).unwrap();
+        let velocities = compiled
+            .ir
+            .events
+            .iter()
+            .take(2)
+            .map(|event| event.velocity)
+            .collect::<Vec<_>>();
+        assert_eq!(velocities, vec![1.25, 0.45]);
 
         fs::remove_dir_all(&root).unwrap();
     }

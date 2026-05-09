@@ -38,7 +38,8 @@ expression: json
         "file": "<fixture>/main.rite",
         "line": 16
       },
-      "time_beats": 0.0
+      "time_beats": 0.0,
+      "velocity": 1.0
     },
     {
       "daemon": "bass",
@@ -59,7 +60,8 @@ expression: json
         "file": "<fixture>/main.rite",
         "line": 17
       },
-      "time_beats": 0.0
+      "time_beats": 0.0,
+      "velocity": 1.0
     },
     {
       "daemon": "kick",
@@ -75,7 +77,8 @@ expression: json
         "file": "<fixture>/main.rite",
         "line": 16
       },
-      "time_beats": 1.0
+      "time_beats": 1.0,
+      "velocity": 1.0
     },
     {
       "daemon": "bass",
@@ -96,7 +99,8 @@ expression: json
         "file": "<fixture>/main.rite",
         "line": 17
       },
-      "time_beats": 1.0
+      "time_beats": 1.0,
+      "velocity": 1.0
     },
     {
       "daemon": "kick",
@@ -112,7 +116,8 @@ expression: json
         "file": "<fixture>/main.rite",
         "line": 16
       },
-      "time_beats": 2.0
+      "time_beats": 2.0,
+      "velocity": 1.0
     },
     {
       "daemon": "bass",
@@ -133,7 +138,8 @@ expression: json
         "file": "<fixture>/main.rite",
         "line": 17
       },
-      "time_beats": 2.0
+      "time_beats": 2.0,
+      "velocity": 1.0
     },
     {
       "daemon": "kick",
@@ -149,7 +155,8 @@ expression: json
         "file": "<fixture>/main.rite",
         "line": 16
       },
-      "time_beats": 3.0
+      "time_beats": 3.0,
+      "velocity": 1.0
     },
     {
       "daemon": "bass",
@@ -170,7 +177,8 @@ expression: json
         "file": "<fixture>/main.rite",
         "line": 17
       },
-      "time_beats": 3.0
+      "time_beats": 3.0,
+      "velocity": 1.0
     }
   ],
   "ir_version": "0.1",

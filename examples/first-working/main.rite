@@ -14,7 +14,7 @@ working "First Working" {
     drive 0.3
   }
 
-  spell kicks = pattern "x--- x--- x-x- x---"
+  spell kicks = pattern "X--- x--- x-g- x---"
   spell bassline = notes "F1 - F1 Gb1 | Ab1 - F1 Eb1"
 
   rite main bars 16 {

@@ -48,6 +48,7 @@ pub struct IrEvent {
     pub time_beats: f64,
     pub duration_beats: f64,
     pub daemon: String,
+    pub velocity: f64,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub pitch: Option<IrPitch>,
     pub params: BTreeMap<String, serde_json::Value>,

@@ -151,7 +151,8 @@ pub fn supercollider_script(
         let time = beats_to_seconds(event.time_beats, compiled.ir.tempo_bpm);
         match daemon.kind.as_str() {
             "sample" => {
-                let amp = db_to_amp(param_f64(&event.params, "gain_db").unwrap_or(0.0));
+                let amp =
+                    db_to_amp(param_f64(&event.params, "gain_db").unwrap_or(0.0)) * event.velocity;
                 let pan = param_f64(&event.params, "pan")
                     .unwrap_or(0.0)
                     .clamp(-1.0, 1.0);
@@ -167,7 +168,8 @@ pub fn supercollider_script(
                 if let Some(pitch) = &event.pitch {
                     let freq = midi_to_freq(pitch.midi);
                     let dur = beats_to_seconds(event.duration_beats, compiled.ir.tempo_bpm);
-                    let amp = db_to_amp(param_f64(&event.params, "gain_db").unwrap_or(-10.0));
+                    let amp = db_to_amp(param_f64(&event.params, "gain_db").unwrap_or(-10.0))
+                        * event.velocity;
                     let pan = param_f64(&event.params, "pan")
                         .unwrap_or(0.0)
                         .clamp(-1.0, 1.0);
@@ -229,7 +231,8 @@ fn render_sample(
         beats_to_seconds(event.time_beats, compiled.ir.tempo_bpm),
         sample_rate,
     );
-    let gain = db_to_amp(param_f64(&event.params, "gain_db").unwrap_or(0.0)) as f32;
+    let gain =
+        (db_to_amp(param_f64(&event.params, "gain_db").unwrap_or(0.0)) * event.velocity) as f32;
     let pan = param_f64(&event.params, "pan").unwrap_or(0.0) as f32;
     mix_frames(buffer, start, &sample, gain, pan);
     Ok(())
@@ -244,7 +247,8 @@ fn render_saw_sub(event: &IrEvent, tempo_bpm: &f64, sample_rate: u32, buffer: &m
     let release = 0.08_f64;
     let frames = ((note_seconds + release) * sample_rate as f64).ceil() as usize;
     let freq = 440.0_f32 * 2.0_f32.powf((pitch.midi as f32 - 69.0) / 12.0);
-    let gain = db_to_amp(param_f64(&event.params, "gain_db").unwrap_or(-10.0)) as f32;
+    let gain =
+        (db_to_amp(param_f64(&event.params, "gain_db").unwrap_or(-10.0)) * event.velocity) as f32;
     let pan = param_f64(&event.params, "pan").unwrap_or(0.0) as f32;
     let drive = param_f64(&event.params, "drive")
         .unwrap_or(0.0)
