@@ -1,0 +1,188 @@
+---
+source: tests/cli.rs
+assertion_line: 89
+expression: json
+---
+{
+  "edges": [
+    {
+      "from": "working:CLI Test",
+      "kind": "declares",
+      "to": "daemon:kick"
+    },
+    {
+      "from": "working:CLI Test",
+      "kind": "declares",
+      "to": "daemon:bass"
+    },
+    {
+      "from": "working:CLI Test",
+      "kind": "declares",
+      "to": "spell:kicks"
+    },
+    {
+      "from": "working:CLI Test",
+      "kind": "declares",
+      "to": "spell:bassline"
+    },
+    {
+      "from": "working:CLI Test",
+      "kind": "contains",
+      "to": "rite:main"
+    },
+    {
+      "from": "daemon:kick",
+      "kind": "renders",
+      "to": "event:evt_bb5d32adc4429162"
+    },
+    {
+      "from": "rite:main",
+      "kind": "contains",
+      "to": "event:evt_bb5d32adc4429162"
+    },
+    {
+      "from": "daemon:bass",
+      "kind": "renders",
+      "to": "event:evt_6709128dd4b54dc3"
+    },
+    {
+      "from": "rite:main",
+      "kind": "contains",
+      "to": "event:evt_6709128dd4b54dc3"
+    },
+    {
+      "from": "daemon:kick",
+      "kind": "renders",
+      "to": "event:evt_bb5d2eadc4428a96"
+    },
+    {
+      "from": "rite:main",
+      "kind": "contains",
+      "to": "event:evt_bb5d2eadc4428a96"
+    },
+    {
+      "from": "daemon:bass",
+      "kind": "renders",
+      "to": "event:evt_6709148dd4b55129"
+    },
+    {
+      "from": "rite:main",
+      "kind": "contains",
+      "to": "event:evt_6709148dd4b55129"
+    },
+    {
+      "from": "daemon:kick",
+      "kind": "renders",
+      "to": "event:evt_bb5d3aadc4429efa"
+    },
+    {
+      "from": "rite:main",
+      "kind": "contains",
+      "to": "event:evt_bb5d3aadc4429efa"
+    },
+    {
+      "from": "daemon:bass",
+      "kind": "renders",
+      "to": "event:evt_6709168dd4b5548f"
+    },
+    {
+      "from": "rite:main",
+      "kind": "contains",
+      "to": "event:evt_6709168dd4b5548f"
+    },
+    {
+      "from": "daemon:kick",
+      "kind": "renders",
+      "to": "event:evt_a1f1f7447d200b45"
+    },
+    {
+      "from": "rite:main",
+      "kind": "contains",
+      "to": "event:evt_a1f1f7447d200b45"
+    },
+    {
+      "from": "daemon:bass",
+      "kind": "renders",
+      "to": "event:evt_6709188dd4b557f5"
+    },
+    {
+      "from": "rite:main",
+      "kind": "contains",
+      "to": "event:evt_6709188dd4b557f5"
+    }
+  ],
+  "ir_version": "0.1",
+  "nodes": [
+    {
+      "id": "working:CLI Test",
+      "kind": "working",
+      "label": "CLI Test"
+    },
+    {
+      "id": "daemon:kick",
+      "kind": "daemon",
+      "label": "kick"
+    },
+    {
+      "id": "daemon:bass",
+      "kind": "daemon",
+      "label": "bass"
+    },
+    {
+      "id": "spell:kicks",
+      "kind": "spell",
+      "label": "kicks"
+    },
+    {
+      "id": "spell:bassline",
+      "kind": "spell",
+      "label": "bassline"
+    },
+    {
+      "id": "rite:main",
+      "kind": "rite",
+      "label": "main"
+    },
+    {
+      "id": "event:evt_bb5d32adc4429162",
+      "kind": "event",
+      "label": "trigger"
+    },
+    {
+      "id": "event:evt_6709128dd4b54dc3",
+      "kind": "event",
+      "label": "note"
+    },
+    {
+      "id": "event:evt_bb5d2eadc4428a96",
+      "kind": "event",
+      "label": "trigger"
+    },
+    {
+      "id": "event:evt_6709148dd4b55129",
+      "kind": "event",
+      "label": "note"
+    },
+    {
+      "id": "event:evt_bb5d3aadc4429efa",
+      "kind": "event",
+      "label": "trigger"
+    },
+    {
+      "id": "event:evt_6709168dd4b5548f",
+      "kind": "event",
+      "label": "note"
+    },
+    {
+      "id": "event:evt_a1f1f7447d200b45",
+      "kind": "event",
+      "label": "trigger"
+    },
+    {
+      "id": "event:evt_6709188dd4b557f5",
+      "kind": "event",
+      "label": "note"
+    }
+  ],
+  "working": "CLI Test"
+}

@@ -102,15 +102,15 @@ Purpose: make IR a durable contract between the frontend, renderers, tests, and 
 
 ### Determinism
 
-* Define stable sort order for all emitted arrays.
-* Add snapshot tests proving unrelated whitespace and comments do not change events.
-* Add tests proving unrelated declarations do not perturb event IDs.
+* Define stable sort order for all emitted arrays. Done for current IR arrays.
+* Add snapshot tests proving unrelated whitespace and comments do not change events. Done for event semantics.
+* Add tests proving unrelated declarations do not perturb event IDs. Done for unused daemon and spell declarations.
 * Prepare seeded random streams even before probability is implemented.
 
 ### Inspectability
 
 * Implement `malison ir <file>`.
-* Implement `malison graph <file>` as JSON first, visual output later.
+* Implement `malison graph <file>` as JSON first, visual output later. Done for declarations, rites, and rendered events, with snapshot coverage.
 * Implement `malison scry <file>` as human-readable event/routing/automation inspection.
 
 ### Exit Criteria

@@ -68,6 +68,81 @@ fn ir_outputs_deterministic_json() {
 }
 
 #[test]
+fn graph_outputs_deterministic_json() {
+    let fixture = Fixture::new();
+
+    let output = Command::cargo_bin("malison")
+        .unwrap()
+        .arg("graph")
+        .arg(fixture.main_rite())
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let json: serde_json::Value = serde_json::from_slice(&output).unwrap();
+    assert_eq!(json["ir_version"], "0.1");
+    assert_eq!(json["working"], "CLI Test");
+    assert!(json["nodes"].as_array().unwrap().len() > 4);
+    assert!(json["edges"].as_array().unwrap().len() > 4);
+    insta::assert_json_snapshot!("graph_cli_test", json);
+}
+
+#[test]
+fn comments_and_whitespace_do_not_change_events() {
+    let mut baseline = events_json(RITE);
+    let mut reformatted = events_json(
+        r#"
+// before the language declaration
+language 0.1
+
+working "CLI Test" {
+  tempo    128
+  meter 4/4
+  seed "cli"
+
+  /* declarations can move through whitespace */
+  daemon kick = sample "samples/kick.wav" {
+    gain -3
+  }
+  daemon bass = saw_sub {
+    cutoff 300
+    drive 0.3
+  }
+
+  spell kicks = pattern "x---"
+  spell bassline = notes "F1 -"
+
+  rite main bars 1 {
+    invoke kick with kicks every 1/16
+
+    // the bass stays musically identical
+    invoke bass with bassline every 1/8
+  }
+
+  evoke wav "renders/cli-test.wav"
+}
+"#,
+    );
+
+    strip_event_sources(&mut baseline);
+    strip_event_sources(&mut reformatted);
+    assert_eq!(baseline["events"], reformatted["events"]);
+}
+
+#[test]
+fn unrelated_declarations_do_not_change_event_ids() {
+    let baseline = events_json(RITE);
+    let with_unused_declarations = events_json(&RITE.replace(
+        "  daemon bass = saw_sub { cutoff 300 drive 0.3 }\n\n  spell kicks",
+        "  daemon bass = saw_sub { cutoff 300 drive 0.3 }\n  daemon unused = saw_sub { cutoff 900 drive 0.1 }\n\n  spell unused_notes = notes \"C2 -\"\n  spell kicks",
+    ));
+
+    assert_eq!(event_ids(&baseline), event_ids(&with_unused_declarations));
+}
+
+#[test]
 fn render_rust_backend_writes_wav() {
     let fixture = Fixture::new();
     let out = fixture.root.path().join("renders/cli-test.wav");
@@ -407,4 +482,35 @@ fn normalize_source_files(value: &mut serde_json::Value) {
 
 fn normalize_supercollider_script(script: &str, root: &Path) -> String {
     script.replace(&root.display().to_string(), "<fixture>")
+}
+
+fn events_json(source: &str) -> serde_json::Value {
+    let fixture = Fixture::new_with_source(source);
+    let output = Command::cargo_bin("malison")
+        .unwrap()
+        .arg("events")
+        .arg(fixture.main_rite())
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let mut json: serde_json::Value = serde_json::from_slice(&output).unwrap();
+    normalize_source_files(&mut json);
+    json
+}
+
+fn event_ids(json: &serde_json::Value) -> Vec<String> {
+    json["events"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|event| event["id"].as_str().unwrap().to_string())
+        .collect()
+}
+
+fn strip_event_sources(json: &mut serde_json::Value) {
+    for event in json["events"].as_array_mut().unwrap() {
+        event.as_object_mut().unwrap().remove("source");
+    }
 }

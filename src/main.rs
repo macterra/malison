@@ -30,6 +30,8 @@ enum Command {
     Ir { file: PathBuf },
     /// Validate and print deterministic JSON events.
     Events { file: PathBuf },
+    /// Validate and print a deterministic JSON graph.
+    Graph { file: PathBuf },
     /// Inspect event expansion in a human-readable form.
     Scry { file: PathBuf },
     /// Compile and render audio.
@@ -78,6 +80,11 @@ fn run() -> Result<()> {
         Command::Events { file } => {
             let compiled = load_and_compile(&file)?;
             println!("{}", serde_json::to_string_pretty(&compiled.ir)?);
+            Ok(())
+        }
+        Command::Graph { file } => {
+            let compiled = load_and_compile(&file)?;
+            println!("{}", serde_json::to_string_pretty(&compiled.ir.graph())?);
             Ok(())
         }
         Command::Scry { file } => {
