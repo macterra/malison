@@ -16,7 +16,7 @@ Status: complete.
 
 Purpose: make the current `.rite -> IR -> WAV` path boringly reliable before adding more language.
 
-### Already Done
+### Completed
 
 * Parse one `language 0.1` file.
 * Validate one `working` with `tempo`, `meter`, `seed`, daemons, spells, rites, and `evoke wav`.
@@ -24,15 +24,16 @@ Purpose: make the current `.rite -> IR -> WAV` path boringly reliable before add
 * Render the MVP example through the Rust backend.
 * Render the MVP example through the SuperCollider backend.
 * Keep generated render artifacts out of git.
+* Add CLI integration tests for `check`, `events`, `render --backend rust`, and `render --backend supercollider --dry-run`.
+* Add JSON snapshot tests for `events`.
+* Add SuperCollider script snapshot tests.
+* Add `cargo run -- scry`.
+* Make Phase 0 CLI path validation errors include file paths.
+* Add a `--version` smoke test and basic release metadata.
 
 ### Remaining Work
 
-* Add CLI integration tests for `check`, `events`, `render --backend rust`, and `render --backend supercollider --dry-run`. Done.
-* Add JSON snapshot tests for `events`. Done.
-* Add SuperCollider script snapshot tests. Done.
-* Add `cargo run -- scry` placeholder or remove `scry` from the advertised initial CLI until implemented. Done.
-* Make error messages include file paths consistently, not only line/column spans. Done for Phase 0 CLI path validation; richer diagnostics continue in Phase 1.
-* Add a `--version` smoke test and basic release metadata. Done.
+None. Richer diagnostics, broader parser coverage, and IR schema refinement continue in Phase 1.
 
 ### Exit Criteria
 
@@ -47,10 +48,10 @@ Purpose: turn the current hand-rolled parser into a reliable compiler frontend w
 ### Lexer And Parser
 
 * Decide whether to keep the hand-rolled parser or move to `logos` plus `chumsky`/`lalrpop`.
-* Formalize token tests for comments, strings, escapes, fractions, pitches, identifiers, and reserved words.
-* Reject all reserved future syntax with clear diagnostics.
+* Formalize token tests for comments, strings, escapes, fractions, pitches, identifiers, and reserved words. In progress; comments, strings, numbers, pitches, and block-comment errors are covered.
+* Reject all reserved future syntax with clear diagnostics. In progress; reserved rite-body syntax is rejected.
 * Improve recovery so one bad declaration does not hide every later error.
-* Parse quoted rite names in all places the spec allows.
+* Parse quoted rite names in all places the spec allows. Done for rite declarations.
 * Add source spans to declarations, not only invocations.
 
 ### Diagnostics
@@ -58,8 +59,8 @@ Purpose: turn the current hand-rolled parser into a reliable compiler frontend w
 * Introduce diagnostic codes such as `E021` unresolved daemon and `E044` routing cycle.
 * Print source snippets with caret labels.
 * Distinguish parse errors, semantic errors, backend errors, and filesystem errors.
-* Add suggestions for nearby names: `basss` -> `bass`.
-* Ensure `events` writes no non-JSON text to stdout on success.
+* Add suggestions for nearby names: `basss` -> `bass`. Done for unresolved daemons and spells.
+* Ensure `events` writes no non-JSON text to stdout on success. Done.
 
 ### Validation
 
@@ -69,9 +70,10 @@ Purpose: turn the current hand-rolled parser into a reliable compiler frontend w
   * positive `tempo`
   * supported `meter`
   * positive `every`
-* Reject invoking sample daemons with note patterns and synth daemons with rhythm patterns.
-* Reject empty rites unless explicitly allowed.
-* Validate that output paths are writable before rendering.
+  Done.
+* Reject invoking sample daemons with note patterns and synth daemons with rhythm patterns. Done.
+* Reject empty rites unless explicitly allowed. Done.
+* Validate that output paths are writable before rendering. Done for invalid parent paths.
 
 ### Exit Criteria
 

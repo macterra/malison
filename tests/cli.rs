@@ -153,12 +153,174 @@ fn rejects_non_rite_source_extension() {
         .stderr(predicate::str::contains("must use the .rite extension"));
 }
 
+#[test]
+fn rejects_out_of_range_pan() {
+    let fixture = Fixture::new_with_source(&RITE.replace("gain -3", "gain -3 pan 2"));
+
+    Command::cargo_bin("malison")
+        .unwrap()
+        .arg("check")
+        .arg(fixture.main_rite())
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains(
+            "parameter `pan` must be in [-1, 1]",
+        ));
+}
+
+#[test]
+fn rejects_non_numeric_drive() {
+    let fixture = Fixture::new_with_source(&RITE.replace("drive 0.3", "drive hot"));
+
+    Command::cargo_bin("malison")
+        .unwrap()
+        .arg("check")
+        .arg(fixture.main_rite())
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains(
+            "parameter `drive` must be numeric",
+        ));
+}
+
+#[test]
+fn rejects_zero_every_duration() {
+    let fixture = Fixture::new_with_source(&RITE.replace("every 1/16", "every 0"));
+
+    Command::cargo_bin("malison")
+        .unwrap()
+        .arg("check")
+        .arg(fixture.main_rite())
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains(
+            "`every` duration must be positive",
+        ));
+}
+
+#[test]
+fn rejects_empty_rite() {
+    let fixture = Fixture::new_with_source(&RITE.replace(
+        "    invoke kick with kicks every 1/16\n    invoke bass with bassline every 1/8\n",
+        "",
+    ));
+
+    Command::cargo_bin("malison")
+        .unwrap()
+        .arg("check")
+        .arg(fixture.main_rite())
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("must contain at least one invoke"));
+}
+
+#[test]
+fn rejects_nonpositive_tempo() {
+    let fixture = Fixture::new_with_source(&RITE.replace("tempo 128", "tempo 0"));
+
+    Command::cargo_bin("malison")
+        .unwrap()
+        .arg("check")
+        .arg(fixture.main_rite())
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("tempo must be positive"));
+}
+
+#[test]
+fn rejects_unsupported_meter_denominator() {
+    let fixture = Fixture::new_with_source(&RITE.replace("meter 4/4", "meter 4/7"));
+
+    Command::cargo_bin("malison")
+        .unwrap()
+        .arg("check")
+        .arg(fixture.main_rite())
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains(
+            "unsupported meter denominator `7`",
+        ));
+}
+
+#[test]
+fn rejects_daemon_spell_type_mismatch() {
+    let fixture = Fixture::new_with_source(&RITE.replace(
+        "invoke kick with kicks every 1/16",
+        "invoke kick with bassline every 1/16",
+    ));
+
+    Command::cargo_bin("malison")
+        .unwrap()
+        .arg("check")
+        .arg(fixture.main_rite())
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains(
+            "daemon `kick` cannot be invoked with spell `bassline`",
+        ));
+}
+
+#[test]
+fn suggests_nearby_daemon_name() {
+    let fixture = Fixture::new_with_source(&RITE.replace(
+        "invoke bass with bassline every 1/8",
+        "invoke basss with bassline every 1/8",
+    ));
+
+    Command::cargo_bin("malison")
+        .unwrap()
+        .arg("check")
+        .arg(fixture.main_rite())
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("unresolved daemon `basss`"))
+        .stderr(predicate::str::contains("did you mean `bass`?"));
+}
+
+#[test]
+fn suggests_nearby_spell_name() {
+    let fixture = Fixture::new_with_source(&RITE.replace(
+        "invoke bass with bassline every 1/8",
+        "invoke bass with basslin every 1/8",
+    ));
+
+    Command::cargo_bin("malison")
+        .unwrap()
+        .arg("check")
+        .arg(fixture.main_rite())
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("unresolved spell `basslin`"))
+        .stderr(predicate::str::contains("did you mean `bassline`?"));
+}
+
+#[test]
+fn rejects_output_parent_that_is_file() {
+    let fixture = Fixture::new();
+    let bad_parent = fixture.root.path().join("not-a-dir");
+    fs::write(&bad_parent, "nope").unwrap();
+
+    Command::cargo_bin("malison")
+        .unwrap()
+        .arg("render")
+        .arg(fixture.main_rite())
+        .arg("--out")
+        .arg(bad_parent.join("out.wav"))
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("is not a directory"));
+}
+
 struct Fixture {
     root: TempDir,
 }
 
 impl Fixture {
     fn new() -> Self {
+        Self::new_with_source(RITE)
+    }
+
+    fn new_with_source(source: &str) -> Self {
         let root = tempfile::tempdir().unwrap();
         fs::create_dir_all(root.path().join("samples")).unwrap();
         fs::write(
@@ -167,7 +329,7 @@ impl Fixture {
         )
         .unwrap();
         write_test_kick(&root.path().join("samples/kick.wav"));
-        fs::write(root.path().join("main.rite"), RITE).unwrap();
+        fs::write(root.path().join("main.rite"), source).unwrap();
         Self { root }
     }
 

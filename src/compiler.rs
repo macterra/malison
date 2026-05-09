@@ -101,6 +101,7 @@ pub fn compile_events(
     project_root: &Path,
     working: Working,
 ) -> Result<CompiledWorking> {
+    validate_working_header(&working)?;
     validate_unique_names(
         "daemon",
         working.daemons.iter().map(|daemon| daemon.name.as_str()),
@@ -136,6 +137,12 @@ pub fn compile_events(
     let mut rites = Vec::new();
     let mut cursor_beats = 0.0;
     for rite in &working.rites {
+        if rite.bars == 0 {
+            bail!("rite `{}` must have a positive bar count", rite.name);
+        }
+        if rite.invokes.is_empty() {
+            bail!("rite `{}` must contain at least one invoke", rite.name);
+        }
         let duration_beats = rite.bars as f64 * working.meter.0 as f64;
         rites.push(IrRite {
             id: rite.name.clone(),
@@ -144,8 +151,18 @@ pub fn compile_events(
         });
 
         for invoke in &rite.invokes {
+            if let Some(every) = invoke.every
+                && every.beats <= 0.0
+            {
+                bail!("{}: `every` duration must be positive", invoke.span);
+            }
             let daemon = daemon_map.get(invoke.daemon.as_str()).ok_or_else(|| {
-                anyhow::anyhow!("{}: unresolved daemon `{}`", invoke.span, invoke.daemon)
+                unresolved_name(
+                    "daemon",
+                    &invoke.daemon,
+                    daemon_map.keys().copied(),
+                    invoke.span,
+                )
             })?;
             validate_params(&invoke.daemon, daemon.kind.clone(), &invoke.params)?;
             let params = merged_params(&daemon.params, &invoke.params);
@@ -153,7 +170,7 @@ pub fn compile_events(
             match &invoke.spell {
                 Some(spell_name) => {
                     let spell = spell_map.get(spell_name.as_str()).ok_or_else(|| {
-                        anyhow::anyhow!("{}: unresolved spell `{spell_name}`", invoke.span)
+                        unresolved_name("spell", spell_name, spell_map.keys().copied(), invoke.span)
                     })?;
                     match (&daemon.kind, &spell.kind) {
                         (DaemonKind::Sample, PatternKind::Rhythm) => {
@@ -422,6 +439,44 @@ fn validate_unique_names<'a>(kind: &str, names: impl Iterator<Item = &'a str>) -
     Ok(())
 }
 
+fn unresolved_name<'a>(
+    kind: &str,
+    name: &str,
+    candidates: impl Iterator<Item = &'a str>,
+    span: crate::lexer::Span,
+) -> anyhow::Error {
+    let candidates = candidates.collect::<Vec<_>>();
+    let suggestion = nearest_name(name, &candidates)
+        .map(|candidate| format!("; did you mean `{candidate}`?"))
+        .unwrap_or_default();
+    anyhow::anyhow!("{span}: unresolved {kind} `{name}`{suggestion}")
+}
+
+fn nearest_name<'a>(name: &str, candidates: &'a [&'a str]) -> Option<&'a str> {
+    candidates
+        .iter()
+        .map(|candidate| (*candidate, edit_distance(name, candidate)))
+        .filter(|(_, distance)| *distance <= 2)
+        .min_by_key(|(_, distance)| *distance)
+        .map(|(candidate, _)| candidate)
+}
+
+fn edit_distance(left: &str, right: &str) -> usize {
+    let mut previous = (0..=right.chars().count()).collect::<Vec<_>>();
+    let mut current = vec![0; previous.len()];
+    for (left_index, left_ch) in left.chars().enumerate() {
+        current[0] = left_index + 1;
+        for (right_index, right_ch) in right.chars().enumerate() {
+            let substitution = previous[right_index] + usize::from(left_ch != right_ch);
+            let insertion = current[right_index] + 1;
+            let deletion = previous[right_index + 1] + 1;
+            current[right_index + 1] = substitution.min(insertion).min(deletion);
+        }
+        std::mem::swap(&mut previous, &mut current);
+    }
+    previous[right.chars().count()]
+}
+
 fn validate_sample_path(project_root: &Path, sample: &str) -> Result<()> {
     if sample.starts_with('~') || sample.contains('*') || sample.contains("://") {
         bail!("sample path `{sample}` is not valid in language 0.1");
@@ -429,6 +484,31 @@ fn validate_sample_path(project_root: &Path, sample: &str) -> Result<()> {
     let path = project_root.join(sample);
     if !path.exists() {
         bail!("sample file `{}` does not exist", path.display());
+    }
+    Ok(())
+}
+
+pub fn validate_output_path(out_path: &Path) -> Result<()> {
+    if let Some(parent) = out_path
+        .parent()
+        .filter(|path| !path.as_os_str().is_empty())
+        && parent.exists()
+        && !parent.is_dir()
+    {
+        bail!("output parent `{}` is not a directory", parent.display());
+    }
+    Ok(())
+}
+
+fn validate_working_header(working: &Working) -> Result<()> {
+    if working.tempo_bpm <= 0.0 {
+        bail!("tempo must be positive");
+    }
+    if working.meter.0 == 0 || working.meter.1 == 0 {
+        bail!("meter must use positive numerator and denominator");
+    }
+    if !matches!(working.meter.1, 1 | 2 | 4 | 8 | 16 | 32) {
+        bail!("unsupported meter denominator `{}`", working.meter.1);
     }
     Ok(())
 }
@@ -447,6 +527,27 @@ fn validate_params(owner: &str, kind: DaemonKind, params: &[crate::parser::Param
         if !allowed {
             bail!("`{}` does not support parameter `{}`", owner, param.name);
         }
+        validate_param_value(owner, &param.name, &param.value)?;
+    }
+    Ok(())
+}
+
+fn validate_param_value(owner: &str, name: &str, value: &Value) -> Result<()> {
+    let number = match value {
+        Value::Number(number) => *number,
+        _ => bail!("`{owner}` parameter `{name}` must be numeric"),
+    };
+    match name {
+        "pan" if !(-1.0..=1.0).contains(&number) => {
+            bail!("`{owner}` parameter `pan` must be in [-1, 1]");
+        }
+        "drive" if !(0.0..=1.0).contains(&number) => {
+            bail!("`{owner}` parameter `drive` must be in [0, 1]");
+        }
+        "cutoff" | "highpass" | "lowpass" if number <= 0.0 => {
+            bail!("`{owner}` parameter `{name}` must be positive");
+        }
+        _ => {}
     }
     Ok(())
 }

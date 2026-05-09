@@ -276,3 +276,45 @@ impl Lexer {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn lexes_comments_strings_numbers_and_pitches() {
+        let tokens = lex(r#"
+// line comment
+language 0.1
+/* block comment */
+working "Black \"Circuit\"\n" {
+  meter 4/4
+  root F1
+  spell bassline = notes "F1 - Gb1"
+}
+"#)
+        .unwrap();
+
+        assert!(matches!(tokens[0].kind, TokenKind::Ident(ref value) if value == "language"));
+        assert!(matches!(tokens[1].kind, TokenKind::Number(ref value) if value == "0.1"));
+        assert!(
+            tokens
+                .iter()
+                .any(|token| matches!(token.kind, TokenKind::Pitch(ref value) if value == "F1"))
+        );
+        assert!(tokens.iter().any(
+            |token| matches!(token.kind, TokenKind::String(ref value) if value == "F1 - Gb1")
+        ));
+        assert!(
+            tokens.iter().any(
+                |token| matches!(token.kind, TokenKind::String(ref value) if value.contains("Black \"Circuit\""))
+            )
+        );
+    }
+
+    #[test]
+    fn rejects_unterminated_block_comment() {
+        let error = lex("language 0.1 /* nope").unwrap_err().to_string();
+        assert!(error.contains("unterminated block comment"));
+    }
+}

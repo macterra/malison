@@ -135,6 +135,7 @@ fn run() -> Result<()> {
                     out_path.display()
                 );
             }
+            compiler::validate_output_path(&out_path)?;
 
             if backend == "supercollider" {
                 return renderer::render_supercollider(

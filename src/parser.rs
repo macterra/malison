@@ -303,12 +303,15 @@ impl<'a> Parser<'a> {
             });
         }
 
-        let unit = if let Some(TokenKind::Ident(unit)) = self.peek_kind() {
-            let unit = unit.clone();
-            self.advance();
-            unit
-        } else {
-            return Ok(Duration { beats: numerator });
+        let unit = match self.peek_kind() {
+            Some(TokenKind::Ident(unit))
+                if matches!(unit.as_str(), "beat" | "beats" | "bars" | "sec") =>
+            {
+                let unit = unit.clone();
+                self.advance();
+                unit
+            }
+            _ => return Ok(Duration { beats: numerator }),
         };
 
         let beats = match unit.as_str() {
@@ -517,5 +520,56 @@ working "First Working" {
         assert_eq!(working.daemons.len(), 2);
         assert_eq!(working.spells.len(), 2);
         assert_eq!(working.rites.len(), 1);
+    }
+
+    #[test]
+    fn parses_quoted_rite_name() {
+        let source = r#"
+language 0.1
+
+working "Quoted Rite" {
+  tempo 120
+  meter 4/4
+  seed "seed"
+
+  daemon kick = sample "samples/kick.wav"
+  spell kicks = pattern "x---"
+
+  rite "machine prayer" bars 1 {
+    invoke kick with kicks every 1/16
+  }
+
+  evoke wav "renders/quoted.wav"
+}
+"#;
+
+        let working = parse_source(Path::new("fixture.rite"), source).unwrap();
+        assert_eq!(working.rites[0].name, "machine prayer");
+    }
+
+    #[test]
+    fn rejects_reserved_future_syntax_in_rite_body() {
+        let source = r#"
+language 0.1
+
+working "Future Syntax" {
+  tempo 120
+  meter 4/4
+  seed "seed"
+
+  daemon kick = sample "samples/kick.wav"
+
+  rite main bars 1 {
+    raise tension 0.1
+  }
+
+  evoke wav "renders/future.wav"
+}
+"#;
+
+        let error = parse_source(Path::new("fixture.rite"), source)
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains("expected `invoke`, found `raise`"));
     }
 }
