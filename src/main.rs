@@ -41,6 +41,8 @@ enum Command {
     },
     /// Compare two source files by deterministic IR/event output.
     Diff { left: PathBuf, right: PathBuf },
+    /// Print backend capability metadata as JSON.
+    Capabilities,
     /// Inspect event expansion in a human-readable form.
     Scry { file: PathBuf },
     /// Format a source file in place.
@@ -138,6 +140,13 @@ fn run() -> Result<()> {
             let left = load_and_compile(&left)?;
             let right = load_and_compile(&right)?;
             print_ir_diff(&left.ir, &right.ir);
+            Ok(())
+        }
+        Command::Capabilities => {
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&renderer::backend_capabilities())?
+            );
             Ok(())
         }
         Command::Scry { file } => {

@@ -323,6 +323,18 @@ fn version_flag_reports_package_version() {
 }
 
 #[test]
+fn capabilities_outputs_backend_json() {
+    Command::cargo_bin("malison")
+        .unwrap()
+        .arg("capabilities")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("\"name\": \"rust\""))
+        .stdout(predicate::str::contains("\"name\": \"supercollider\""))
+        .stdout(predicate::str::contains("metal_hit"));
+}
+
+#[test]
 fn rejects_non_rite_source_extension() {
     let fixture = Fixture::new();
     let bad = fixture.root.path().join("main.txt");

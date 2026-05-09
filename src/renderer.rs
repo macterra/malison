@@ -6,11 +6,65 @@ use std::process::Command;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use anyhow::{Context, Result, bail};
+use serde::Serialize;
 
 use crate::compiler::CompiledWorking;
 use crate::ir::{IrDaemon, IrEvent};
 
 const RENDER_TAIL_SECONDS: f64 = 2.0;
+
+#[derive(Clone, Debug, Serialize)]
+pub struct BackendCapabilities {
+    pub backends: Vec<BackendCapability>,
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub struct BackendCapability {
+    pub name: &'static str,
+    pub daemon_kinds: Vec<&'static str>,
+    pub sample_features: Vec<&'static str>,
+    pub pattern_features: Vec<&'static str>,
+    pub unsupported: Vec<&'static str>,
+}
+
+pub fn backend_capabilities() -> BackendCapabilities {
+    let daemon_kinds = vec![
+        "sample",
+        "saw_sub",
+        "drone",
+        "noise_burst",
+        "swarm",
+        "metal_hit",
+    ];
+    let sample_features = vec!["mono_wav", "stereo_wav", "start_seconds", "end_seconds"];
+    let pattern_features = vec![
+        "rhythm",
+        "notes",
+        "euclid",
+        "accents",
+        "ghosts",
+        "deterministic_transforms",
+        "seeded_stochastic_transforms",
+    ];
+    BackendCapabilities {
+        backends: vec![
+            BackendCapability {
+                name: "rust",
+                daemon_kinds: daemon_kinds.clone(),
+                sample_features: sample_features.clone(),
+                pattern_features: pattern_features.clone(),
+                unsupported: vec!["audio_bus_routing", "effect_processors", "parameter_bindings"],
+            },
+            BackendCapability {
+                name: "supercollider",
+                daemon_kinds,
+                sample_features,
+                pattern_features,
+                unsupported: vec!["audio_bus_routing", "effect_processors", "parameter_bindings"],
+            },
+        ],
+    }
+}
 
 pub fn render_wav(
     compiled: &CompiledWorking,

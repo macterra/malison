@@ -235,9 +235,9 @@ Improve `saw_sub`:
 
 ### Backend Parity
 
-* Maintain a backend capability table for Rust and SuperCollider.
-* Add backend parity tests where exact waveform equality is not required but event support is.
-* Make unsupported backend features fail before render starts.
+* Maintain a backend capability table for Rust and SuperCollider. Done.
+* Add backend parity tests where exact waveform equality is not required but event support is. Done through shared capability metadata and render/script tests.
+* Make unsupported backend features fail before render starts. Done for backend selection and advertised unsupported capability metadata.
 * Add optional retention of generated SC scripts for debugging.
 
 ### Exit Criteria
@@ -422,7 +422,7 @@ Purpose: package Malison as a real tool.
 * Tutorial: first `.rite`.
 * Reference: language `0.1`.
 * Reference: IR schema.
-* Reference: backend capabilities.
+* Reference: backend capabilities. Done.
 * Guide: debugging with `events`, `ir`, `graph`, and `scry`.
 
 ### Exit Criteria
