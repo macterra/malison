@@ -184,7 +184,7 @@ Purpose: move beyond one repeating section while keeping the model inspectable.
 ### Invocation Lifecycle
 
 * Define whether invocations are event streams, one-shot events, or persistent processes. Done: pattern invocations are event streams, no-pattern sample/synth invocations are one-shots, and no-pattern drone invocations are persistent continuous events.
-* Implement `banish` only after lifecycle semantics are explicit.
+* Implement `banish` only after lifecycle semantics are explicit. Done; `banish daemon` emits a lifecycle event and truncates already-running continuous events for that daemon.
 * Add continuous drone behavior through a clear event kind. Done with `continuous`.
 
 ### Automation
@@ -193,7 +193,7 @@ Purpose: move beyond one repeating section while keeping the model inspectable.
   * linear
   * exponential
   * stepped
-  Linear `raise`/`lower` controls are done; exponential and stepped remain pending.
+  Done for rite-level `raise`/`lower` IR controls.
 * Lower automation into IR control events. Done.
 * Implement automation in Rust and SC backends. Pending for audio parameter binding; current controls are inspectable IR only.
 

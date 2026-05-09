@@ -87,6 +87,7 @@ pub struct Rite {
     pub placement: Option<RitePlacement>,
     pub layer: bool,
     pub invokes: Vec<Invoke>,
+    pub banishes: Vec<Banish>,
     pub automations: Vec<Automation>,
     pub span: Span,
 }
@@ -95,9 +96,17 @@ pub struct Rite {
 pub struct Automation {
     pub direction: AutomationDirection,
     pub target: String,
+    pub curve: AutomationCurve,
     pub from: f64,
     pub to: f64,
     pub span: Span,
+}
+
+#[derive(Clone, Debug)]
+pub enum AutomationCurve {
+    Linear,
+    Exponential,
+    Stepped,
 }
 
 #[derive(Clone, Debug)]
@@ -118,6 +127,13 @@ pub struct Invoke {
     pub spell: Option<String>,
     pub every: Option<Duration>,
     pub params: Vec<Param>,
+    pub span: Span,
+    pub source_order: usize,
+}
+
+#[derive(Clone, Debug)]
+pub struct Banish {
+    pub daemon: String,
     pub span: Span,
     pub source_order: usize,
 }
@@ -440,11 +456,14 @@ impl<'a> Parser<'a> {
         };
         self.expect(TokenKind::LBrace)?;
         let mut invokes = Vec::new();
+        let mut banishes = Vec::new();
         let mut automations = Vec::new();
         while !self.check(TokenKind::RBrace) {
             if self.check_ident("invoke") {
                 self.advance();
                 invokes.push(self.parse_invoke()?);
+            } else if self.check_ident("banish") {
+                banishes.push(self.parse_banish()?);
             } else if self.check_ident("raise") || self.check_ident("lower") {
                 automations.push(self.parse_automation()?);
             } else {
@@ -458,6 +477,7 @@ impl<'a> Parser<'a> {
             placement,
             layer,
             invokes,
+            banishes,
             automations,
             span,
         })
@@ -474,12 +494,40 @@ impl<'a> Parser<'a> {
         let from = self.expect_number()?;
         self.expect(TokenKind::Arrow)?;
         let to = self.expect_number()?;
+        let curve = if self.check_ident("curve") {
+            self.advance();
+            match self.expect_ident_any()?.as_str() {
+                "linear" => AutomationCurve::Linear,
+                "exponential" => AutomationCurve::Exponential,
+                "stepped" => AutomationCurve::Stepped,
+                other => bail!(
+                    "{}: unsupported automation curve `{other}`",
+                    self.previous_span()
+                ),
+            }
+        } else {
+            AutomationCurve::Linear
+        };
         Ok(Automation {
             direction,
             target,
+            curve,
             from,
             to,
             span,
+        })
+    }
+
+    fn parse_banish(&mut self) -> Result<Banish> {
+        let span = self.location();
+        self.expect_ident("banish")?;
+        let daemon = self.expect_ident_any()?;
+        let source_order = self.invoke_order;
+        self.invoke_order += 1;
+        Ok(Banish {
+            daemon,
+            span,
+            source_order,
         })
     }
 
@@ -524,6 +572,7 @@ impl<'a> Parser<'a> {
         let mut params = Vec::new();
         while !self.check(TokenKind::RBrace)
             && !self.check_ident("invoke")
+            && !self.check_ident("banish")
             && !self.check_ident("raise")
             && !self.check_ident("lower")
         {
@@ -775,6 +824,7 @@ fn is_reserved_word(value: &str) -> bool {
             | "rite"
             | "bars"
             | "invoke"
+            | "banish"
             | "with"
             | "every"
             | "evoke"

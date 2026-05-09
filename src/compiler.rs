@@ -9,7 +9,8 @@ use crate::ir::{
     IrRite, IrSource, IrSpell, IrWard,
 };
 use crate::parser::{
-    AutomationDirection, DaemonKind, PatternKind, PatternTransform, RitePlacement, Value, Working,
+    AutomationCurve, AutomationDirection, DaemonKind, PatternKind, PatternTransform, RitePlacement,
+    Value, Working,
 };
 
 #[derive(Clone, Debug)]
@@ -154,16 +155,46 @@ pub fn compile_events(
                 AutomationDirection::Raise => (automation.from, automation.to),
                 AutomationDirection::Lower => (automation.from, automation.to),
             };
+            validate_automation_curve(&automation.curve, from, to, automation.span)?;
             control_events.push(IrControlEvent {
                 id,
                 semantic_path,
                 target: automation.target.clone(),
-                curve: "linear".to_string(),
+                curve: automation_curve_label(&automation.curve).to_string(),
                 start_beats: rite_start,
                 duration_beats,
                 from,
                 to,
                 source: source_for_span(input, automation.span),
+            });
+        }
+
+        for banish in &rite.banishes {
+            if !daemon_map.contains_key(banish.daemon.as_str()) {
+                bail!(
+                    "{}",
+                    unresolved_name(
+                        "daemon",
+                        &banish.daemon,
+                        daemon_map.keys().copied(),
+                        banish.span,
+                    )
+                );
+            }
+            truncate_continuous_events(&mut events, &banish.daemon, rite_start);
+            let (id, semantic_path) = event_identity(&rite.name, banish.source_order, "banish");
+            events.push(IrEvent {
+                id,
+                semantic_path,
+                kind: "banish".to_string(),
+                time_beats: rite_start,
+                duration_beats: 0.0,
+                daemon: banish.daemon.clone(),
+                velocity: 0.0,
+                pitch: None,
+                params: BTreeMap::new(),
+                source: source_for_span(input, banish.span),
+                source_order: banish.source_order,
             });
         }
 
@@ -523,6 +554,38 @@ fn validate_control_target(target: &str, span: crate::lexer::Span) -> Result<()>
         Ok(())
     } else {
         bail!("{span}: unsupported control target `{target}`");
+    }
+}
+
+fn validate_automation_curve(
+    curve: &AutomationCurve,
+    from: f64,
+    to: f64,
+    span: crate::lexer::Span,
+) -> Result<()> {
+    if matches!(curve, AutomationCurve::Exponential) && (from <= 0.0 || to <= 0.0) {
+        bail!("{span}: exponential automation endpoints must be positive");
+    }
+    Ok(())
+}
+
+fn automation_curve_label(curve: &AutomationCurve) -> &'static str {
+    match curve {
+        AutomationCurve::Linear => "linear",
+        AutomationCurve::Exponential => "exponential",
+        AutomationCurve::Stepped => "stepped",
+    }
+}
+
+fn truncate_continuous_events(events: &mut [IrEvent], daemon: &str, banish_time: f64) {
+    for event in events {
+        if event.daemon == daemon
+            && event.kind == "continuous"
+            && event.time_beats < banish_time
+            && event.time_beats + event.duration_beats > banish_time
+        {
+            event.duration_beats = banish_time - event.time_beats;
+        }
     }
 }
 
@@ -1679,7 +1742,7 @@ working "Automation Test" {
 
   rite main bars 2 {
     invoke kick with hits every 1/16
-    raise tension 0.2 -> 0.8
+    raise tension 0.2 -> 0.8 curve exponential
   }
 
   evoke wav "renders/test.wav"
@@ -1691,7 +1754,59 @@ working "Automation Test" {
         let compiled = compile_events(&path, &root, &ProjectConfig::default(), working).unwrap();
         assert_eq!(compiled.ir.control_events.len(), 1);
         assert_eq!(compiled.ir.control_events[0].target, "tension");
+        assert_eq!(compiled.ir.control_events[0].curve, "exponential");
         assert_eq!(compiled.ir.control_events[0].duration_beats, 8.0);
+
+        fs::remove_dir_all(&root).unwrap();
+    }
+
+    #[test]
+    fn lowers_banish_to_lifecycle_event_and_truncates_continuous_sources() {
+        let root = std::env::temp_dir().join(format!("malison-banish-test-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        fs::create_dir_all(root.join("samples")).unwrap();
+
+        let source = r#"
+language 0.1
+
+working "Banish Test" {
+  tempo 120
+  meter 4/4
+  seed "seed"
+
+  daemon bed = drone { root F1 gain -18 }
+  daemon hit = noise_burst
+
+  rite bed_layer at bar 1 bars 4 layer {
+    invoke bed
+  }
+
+  rite cut at bar 3 bars 1 layer {
+    banish bed
+    invoke hit
+  }
+
+  evoke wav "renders/test.wav"
+}
+"#;
+        let path = root.join("main.rite");
+        fs::write(&path, source).unwrap();
+        let working = parse_source(&path, source).unwrap();
+        let compiled = compile_events(&path, &root, &ProjectConfig::default(), working).unwrap();
+        let continuous = compiled
+            .ir
+            .events
+            .iter()
+            .find(|event| event.kind == "continuous")
+            .unwrap();
+        assert_eq!(continuous.duration_beats, 8.0);
+        assert!(
+            compiled
+                .ir
+                .events
+                .iter()
+                .any(|event| event.kind == "banish" && event.daemon == "bed")
+        );
 
         fs::remove_dir_all(&root).unwrap();
     }

@@ -32,6 +32,16 @@ Supported declarations:
 * `rite name at 1:30 bars 4 layer { ... }`
 * `evoke wav "renders/out.wav"`
 
+Supported rite statements:
+
+* `invoke daemon`
+* `invoke daemon with spell every 1/16`
+* `banish daemon`
+* `raise tension 0.2 -> 0.8`
+* `lower degradation 0.6 -> 0.1 curve stepped`
+
+`banish` emits a lifecycle event at the start of its rite and truncates any already-running continuous event for the named daemon. Automation curves may be `linear`, `exponential`, or `stepped`; exponential curves require positive endpoints.
+
 Supported pattern transforms:
 
 * `.rotate(steps)`

@@ -97,6 +97,9 @@ pub fn render_wav(
         .collect::<BTreeMap<_, _>>();
 
     for event in &compiled.ir.events {
+        if event.kind == "banish" {
+            continue;
+        }
         let daemon = daemons
             .get(event.daemon.as_str())
             .ok_or_else(|| anyhow::anyhow!("event references unknown daemon `{}`", event.daemon))?;
@@ -220,6 +223,9 @@ pub fn supercollider_script(
 
     let mut node_id = 1000;
     for event in &compiled.ir.events {
+        if event.kind == "banish" {
+            continue;
+        }
         let daemon = daemons
             .get(event.daemon.as_str())
             .ok_or_else(|| anyhow::anyhow!("event references unknown daemon `{}`", event.daemon))?;

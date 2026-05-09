@@ -176,6 +176,8 @@ Rite automation lowers to inspectable control events.
 }
 ```
 
+`curve` is one of `linear`, `exponential`, or `stepped`. Control event values are normalized aesthetic streams unless a later binding maps them to a concrete parameter.
+
 ## Events
 
 Events are sorted by `time_beats`, then source order, then `kind`, then `id`.
@@ -199,6 +201,8 @@ Events are sorted by `time_beats`, then source order, then `kind`, then `id`.
   }
 }
 ```
+
+Lifecycle events such as `banish` use the same event object shape with `kind: "banish"`, `duration_beats: 0`, and `velocity: 0`. Renderers skip the marker event itself; the compiler applies its lifecycle effect before rendering by truncating affected continuous events.
 
 Note events additionally include `pitch`:
 
