@@ -285,6 +285,7 @@ Each effect needs:
   * limiter ceiling declaration validation
   * loudness target declaration validation
   * unsafe gain rejection
+  Limiter ceiling declaration validation is done.
 * Add soft wards as processors only after routing and effects are working.
 
 ### Exit Criteria

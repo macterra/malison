@@ -22,6 +22,15 @@ pub struct Working {
 pub struct Circle {
     pub name: String,
     pub parent: Option<String>,
+    pub wards: Vec<Ward>,
+    pub span: Span,
+}
+
+#[derive(Clone, Debug)]
+pub struct Ward {
+    pub kind: String,
+    pub param: String,
+    pub value: f64,
     pub span: Span,
 }
 
@@ -287,13 +296,38 @@ impl<'a> Parser<'a> {
             None
         };
         self.expect(TokenKind::LBrace)?;
+        let mut wards = Vec::new();
         while !self.check(TokenKind::RBrace) {
-            if self.advance().is_none() {
-                bail!("{}: expected `}}`", self.eof_location());
+            if self.check_ident("ward") {
+                wards.push(self.parse_ward()?);
+            } else {
+                bail!(
+                    "{}: expected `ward` or `}}` in circle declaration",
+                    self.location()
+                );
             }
         }
         self.expect(TokenKind::RBrace)?;
-        Ok(Circle { name, parent, span })
+        Ok(Circle {
+            name,
+            parent,
+            wards,
+            span,
+        })
+    }
+
+    fn parse_ward(&mut self) -> Result<Ward> {
+        let span = self.location();
+        self.expect_ident("ward")?;
+        let kind = self.expect_ident_any()?;
+        let param = self.expect_ident_any()?;
+        let value = self.expect_number()?;
+        Ok(Ward {
+            kind,
+            param,
+            value,
+            span,
+        })
     }
 
     fn parse_spell(&mut self) -> Result<Spell> {

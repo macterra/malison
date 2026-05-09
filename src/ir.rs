@@ -36,6 +36,15 @@ pub struct IrCircle {
     pub id: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub parent: Option<String>,
+    pub wards: Vec<IrWard>,
+    pub source: IrSource,
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub struct IrWard {
+    pub kind: String,
+    pub param: String,
+    pub value: f64,
     pub source: IrSource,
 }
 

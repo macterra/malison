@@ -5,8 +5,8 @@ use std::path::{Path, PathBuf};
 use anyhow::{Context, Result, bail};
 
 use crate::ir::{
-    Ir, IrCircle, IrControlEvent, IrDaemon, IrEvent, IrPitch, IrRandomStream, IrRenderTarget, IrRite,
-    IrSource, IrSpell,
+    Ir, IrCircle, IrControlEvent, IrDaemon, IrEvent, IrPitch, IrRandomStream, IrRenderTarget,
+    IrRite, IrSource, IrSpell, IrWard,
 };
 use crate::parser::{
     AutomationDirection, DaemonKind, PatternKind, PatternTransform, RitePlacement, Value, Working,
@@ -393,6 +393,9 @@ fn validate_circles(working: &Working) -> Result<()> {
         parents.insert(circle.name.as_str(), circle.parent.as_deref().or(Some("master")));
     }
     for circle in &working.circles {
+        for ward in &circle.wards {
+            validate_ward(ward)?;
+        }
         if let Some(parent) = circle.parent.as_deref()
             && !parents.contains_key(parent)
         {
@@ -424,14 +427,40 @@ fn ir_circles(input: &Path, working: &Working) -> Vec<IrCircle> {
     let mut circles = vec![IrCircle {
         id: "master".to_string(),
         parent: None,
+        wards: Vec::new(),
         source: source_for_span(input, working.evoke_span),
     }];
     circles.extend(working.circles.iter().map(|circle| IrCircle {
         id: circle.name.clone(),
         parent: circle.parent.clone().or_else(|| Some("master".to_string())),
+        wards: circle
+            .wards
+            .iter()
+            .map(|ward| IrWard {
+                kind: ward.kind.clone(),
+                param: ward.param.clone(),
+                value: ward.value,
+                source: source_for_span(input, ward.span),
+            })
+            .collect(),
         source: source_for_span(input, circle.span),
     }));
     circles
+}
+
+fn validate_ward(ward: &crate::parser::Ward) -> Result<()> {
+    match (ward.kind.as_str(), ward.param.as_str()) {
+        ("limiter", "ceiling") if ward.value <= 0.0 => Ok(()),
+        ("limiter", "ceiling") => {
+            bail!("{}: limiter ceiling must be <= 0 dB", ward.span);
+        }
+        _ => bail!(
+            "{}: unsupported ward `{} {}`",
+            ward.span,
+            ward.kind,
+            ward.param
+        ),
+    }
 }
 
 fn ranges_overlap(left_start: f64, left_end: f64, right_start: f64, right_end: f64) -> bool {
@@ -1581,7 +1610,9 @@ working "Circle Test" {
   meter 4/4
   seed "seed"
 
-  circle drums -> master {}
+  circle drums -> master {
+    ward limiter ceiling -1
+  }
   daemon kick = sample "samples/kick.wav" { out drums }
   spell hits = pattern "x---"
 
@@ -1598,6 +1629,7 @@ working "Circle Test" {
         let compiled = compile_events(&path, &root, working).unwrap();
         assert_eq!(compiled.ir.circles.len(), 2);
         assert_eq!(compiled.ir.circles[1].parent.as_deref(), Some("master"));
+        assert_eq!(compiled.ir.circles[1].wards[0].kind, "limiter");
 
         let bad = source.replace("out drums", "out nowhere");
         fs::write(&path, &bad).unwrap();

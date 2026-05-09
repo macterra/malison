@@ -11,7 +11,8 @@ expression: json
         "column": 3,
         "file": "<fixture>/main.rite",
         "line": 20
-      }
+      },
+      "wards": []
     }
   ],
   "control_events": [],
