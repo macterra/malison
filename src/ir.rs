@@ -34,6 +34,7 @@ pub struct IrSpell {
     pub id: String,
     pub kind: String,
     pub body: String,
+    pub transforms: Vec<String>,
     pub source: IrSource,
 }
 

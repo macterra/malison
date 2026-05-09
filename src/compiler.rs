@@ -7,7 +7,7 @@ use anyhow::{Context, Result, bail};
 use crate::ir::{
     Ir, IrDaemon, IrEvent, IrPitch, IrRandomStream, IrRenderTarget, IrRite, IrSource, IrSpell,
 };
-use crate::parser::{DaemonKind, PatternKind, Value, Working};
+use crate::parser::{DaemonKind, PatternKind, PatternTransform, Value, Working};
 
 #[derive(Clone, Debug)]
 pub struct CompiledWorking {
@@ -121,7 +121,7 @@ pub fn compile_events(
                                 cursor_beats,
                                 duration_beats,
                                 invoke,
-                                &spell.body,
+                                spell,
                                 &params,
                             )?;
                         }
@@ -133,7 +133,7 @@ pub fn compile_events(
                                 cursor_beats,
                                 duration_beats,
                                 invoke,
-                                &spell.body,
+                                spell,
                                 &params,
                             )?;
                         }
@@ -212,6 +212,11 @@ pub fn compile_events(
                     PatternKind::Notes => "notes".to_string(),
                 },
                 body: spell.body.clone(),
+                transforms: spell
+                    .transforms
+                    .iter()
+                    .map(pattern_transform_label)
+                    .collect(),
                 source: source_for_span(input, spell.span),
             })
             .collect(),
@@ -314,11 +319,16 @@ fn expand_rhythm(
     rite_start: f64,
     rite_duration: f64,
     invoke: &crate::parser::Invoke,
-    body: &str,
+    spell: &crate::parser::Spell,
     params: &BTreeMap<String, serde_json::Value>,
 ) -> Result<()> {
-    let steps = rhythm_steps(body)?;
-    let step_duration = invoke.every.map(|duration| duration.beats).unwrap_or(0.25);
+    let mut steps = rhythm_steps(&spell.body)?;
+    apply_transforms(&mut steps, &spell.transforms)?;
+    let step_duration = invoke
+        .every
+        .or_else(|| transform_every(&spell.transforms))
+        .map(|duration| duration.beats)
+        .unwrap_or(0.25);
     let total_steps = (rite_duration / step_duration).ceil() as usize;
     for absolute_step in 0..total_steps {
         let time = absolute_step as f64 * step_duration;
@@ -353,11 +363,16 @@ fn expand_notes(
     rite_start: f64,
     rite_duration: f64,
     invoke: &crate::parser::Invoke,
-    body: &str,
+    spell: &crate::parser::Spell,
     params: &BTreeMap<String, serde_json::Value>,
 ) -> Result<()> {
-    let steps = note_steps(body)?;
-    let step_duration = invoke.every.map(|duration| duration.beats).unwrap_or(0.5);
+    let mut steps = note_steps(&spell.body)?;
+    apply_transforms(&mut steps, &spell.transforms)?;
+    let step_duration = invoke
+        .every
+        .or_else(|| transform_every(&spell.transforms))
+        .map(|duration| duration.beats)
+        .unwrap_or(0.5);
     let total_steps = (rite_duration / step_duration).ceil() as usize;
     for absolute_step in 0..total_steps {
         let time = absolute_step as f64 * step_duration;
@@ -410,6 +425,45 @@ fn rhythm_steps(body: &str) -> Result<Vec<Option<f64>>> {
         bail!("rhythm pattern cannot be empty");
     }
     Ok(steps)
+}
+
+fn apply_transforms<T: Clone>(steps: &mut Vec<T>, transforms: &[PatternTransform]) -> Result<()> {
+    for transform in transforms {
+        match transform {
+            PatternTransform::Rotate(amount) => rotate_steps(steps, *amount),
+            PatternTransform::Reverse => steps.reverse(),
+            PatternTransform::Repeat(count) => {
+                if *count == 0 {
+                    bail!("pattern repeat count must be positive");
+                }
+                let original = steps.clone();
+                for _ in 1..*count {
+                    steps.extend(original.iter().cloned());
+                }
+            }
+            PatternTransform::Every(duration) if duration.beats <= 0.0 => {
+                bail!("pattern every duration must be positive");
+            }
+            PatternTransform::Every(_) => {}
+        }
+    }
+    Ok(())
+}
+
+fn transform_every(transforms: &[PatternTransform]) -> Option<crate::parser::Duration> {
+    transforms.iter().find_map(|transform| match transform {
+        PatternTransform::Every(duration) => Some(*duration),
+        _ => None,
+    })
+}
+
+fn pattern_transform_label(transform: &PatternTransform) -> String {
+    match transform {
+        PatternTransform::Rotate(steps) => format!("rotate({steps})"),
+        PatternTransform::Reverse => "reverse()".to_string(),
+        PatternTransform::Repeat(count) => format!("repeat({count})"),
+        PatternTransform::Every(duration) => format!("every({})", duration.beats),
+    }
 }
 
 fn parse_euclid(body: &str) -> Result<Option<(u32, u32, i32)>> {
@@ -903,5 +957,87 @@ working "Euclid Rotate Test" {
                 .to_string()
                 .contains("cannot exceed steps")
         );
+    }
+
+    #[test]
+    fn applies_string_pattern_transforms() {
+        let root =
+            std::env::temp_dir().join(format!("malison-transform-test-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        fs::create_dir_all(root.join("samples")).unwrap();
+        fs::write(root.join("samples/kick.wav"), b"not really wav").unwrap();
+
+        let source = r#"
+language 0.1
+
+working "Transform Test" {
+  tempo 120
+  meter 4/4
+  seed "seed"
+
+  daemon kick = sample "samples/kick.wav"
+  spell hits = pattern "x---".rotate(1).repeat(2)
+
+  rite main bars 1 {
+    invoke kick with hits every 1/16
+  }
+
+  evoke wav "renders/test.wav"
+}
+"#;
+        let path = root.join("main.rite");
+        fs::write(&path, source).unwrap();
+        let working = parse_source(&path, source).unwrap();
+        let compiled = compile_events(&path, &root, working).unwrap();
+        let times = compiled
+            .ir
+            .events
+            .iter()
+            .map(|event| event.time_beats)
+            .collect::<Vec<_>>();
+        assert_eq!(times, vec![0.25, 1.25, 2.25, 3.25]);
+
+        fs::remove_dir_all(&root).unwrap();
+    }
+
+    #[test]
+    fn pattern_every_supplies_default_step_duration() {
+        let root =
+            std::env::temp_dir().join(format!("malison-every-test-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        fs::create_dir_all(root.join("samples")).unwrap();
+        fs::write(root.join("samples/kick.wav"), b"not really wav").unwrap();
+
+        let source = r#"
+language 0.1
+
+working "Every Test" {
+  tempo 120
+  meter 4/4
+  seed "seed"
+
+  daemon kick = sample "samples/kick.wav"
+  spell hits = pattern "x-".every(1/8)
+
+  rite main bars 1 {
+    invoke kick with hits
+  }
+
+  evoke wav "renders/test.wav"
+}
+"#;
+        let path = root.join("main.rite");
+        fs::write(&path, source).unwrap();
+        let working = parse_source(&path, source).unwrap();
+        let compiled = compile_events(&path, &root, working).unwrap();
+        let times = compiled
+            .ir
+            .events
+            .iter()
+            .map(|event| event.time_beats)
+            .collect::<Vec<_>>();
+        assert_eq!(times, vec![0.0, 1.0, 2.0, 3.0]);
+
+        fs::remove_dir_all(&root).unwrap();
     }
 }

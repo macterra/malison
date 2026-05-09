@@ -37,6 +37,7 @@ pub struct Spell {
     pub name: String,
     pub kind: PatternKind,
     pub body: String,
+    pub transforms: Vec<PatternTransform>,
     pub span: Span,
 }
 
@@ -44,6 +45,14 @@ pub struct Spell {
 pub enum PatternKind {
     Rhythm,
     Notes,
+}
+
+#[derive(Clone, Debug)]
+pub enum PatternTransform {
+    Rotate(i32),
+    Reverse,
+    Repeat(u32),
+    Every(Duration),
 }
 
 #[derive(Clone, Debug)]
@@ -254,6 +263,7 @@ impl<'a> Parser<'a> {
                     name,
                     kind: PatternKind::Rhythm,
                     body,
+                    transforms: Vec::new(),
                     span,
                 });
             }
@@ -263,12 +273,33 @@ impl<'a> Parser<'a> {
             ),
         };
         let body = self.expect_string()?;
+        let transforms = self.parse_pattern_transforms()?;
         Ok(Spell {
             name,
             kind,
             body,
+            transforms,
             span,
         })
+    }
+
+    fn parse_pattern_transforms(&mut self) -> Result<Vec<PatternTransform>> {
+        let mut transforms = Vec::new();
+        while self.check(TokenKind::Dot) {
+            self.advance();
+            let name = self.expect_ident_any()?;
+            self.expect(TokenKind::LParen)?;
+            let transform = match name.as_str() {
+                "rotate" => PatternTransform::Rotate(self.expect_i32()?),
+                "reverse" => PatternTransform::Reverse,
+                "repeat" => PatternTransform::Repeat(self.expect_u32()?),
+                "every" => PatternTransform::Every(self.parse_duration()?),
+                _ => bail!("{}: unsupported pattern transform `{name}`", self.previous_span()),
+            };
+            self.expect(TokenKind::RParen)?;
+            transforms.push(transform);
+        }
+        Ok(transforms)
     }
 
     fn parse_rite(&mut self) -> Result<Rite> {

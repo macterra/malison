@@ -74,6 +74,7 @@ Spells preserve their declared pattern body and kind.
   "id": "kicks",
   "kind": "pattern",
   "body": "X--- x--- x-g- x---",
+  "transforms": [],
   "source": {
     "file": "examples/first-working/main.rite",
     "line": 16,

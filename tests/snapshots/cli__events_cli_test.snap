@@ -248,7 +248,8 @@ expression: json
         "column": 3,
         "file": "<fixture>/main.rite",
         "line": 12
-      }
+      },
+      "transforms": []
     },
     {
       "body": "F1 -",
@@ -258,7 +259,8 @@ expression: json
         "column": 3,
         "file": "<fixture>/main.rite",
         "line": 13
-      }
+      },
+      "transforms": []
     }
   ],
   "tempo_bpm": 128.0,

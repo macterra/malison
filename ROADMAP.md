@@ -134,10 +134,10 @@ Purpose: make tracks more musical without adding routing or synthesis complexity
 
 Implement deterministic method-chain transforms:
 
-* `.rotate(steps)`
-* `.reverse()`
-* `.repeat(count)`
-* `.every(interval)` if it remains useful after invocation-level `every`
+* `.rotate(steps)`. Done for string patterns and Euclidean rhythms.
+* `.reverse()`. Done for string patterns.
+* `.repeat(count)`. Done for string patterns.
+* `.every(interval)` if it remains useful after invocation-level `every`. Done as a spell-level default that invocation-level `every` can override.
 
 Defer stochastic transforms until random stream identity is settled:
 
