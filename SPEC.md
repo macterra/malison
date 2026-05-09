@@ -672,7 +672,7 @@ daemon kick = sample "kick_909_dark" {
 
 Samples resolve through project paths and installed libraries.
 
-For version `0.1`, `sample` accepts either a project-relative file path or a sample identifier resolved through `malison.toml` sample paths. If resolution finds multiple matches, compilation fails unless the source uses an exact path.
+For version `0.1`, `sample` accepts only an explicit project-relative file path. Sample identifiers resolved through libraries or search paths are deferred until later profiles.
 
 Sample daemon parameters:
 
@@ -715,7 +715,7 @@ Required `saw_sub` semantics:
 ```text
 input event: pitch, start beat, duration beats, params
 oscillator: saw plus optional sub oscillator one octave below
-envelope: fixed ADSR unless overridden by supported params
+envelope: fixed ADSR, attack 0.01 sec, decay 0.18 sec, sustain 0.65, release 0.08 sec
 output: mono or stereo signal routed to master
 ```
 
@@ -1040,6 +1040,7 @@ Options:
 --sample-rate 48000
 --bit-depth 24
 --dry-run
+--force
 ```
 
 ### 16.3 `scry`
@@ -1166,6 +1167,158 @@ working "First Working" {
 }
 ```
 
+### 18.3 Version `0.1` implementation contract
+
+This section resolves the remaining choices needed for the first implementation. If it conflicts with earlier exploratory examples, this section wins for version `0.1`.
+
+#### Lexical rules
+
+Version `0.1` source is UTF-8 text.
+
+```text
+line comment       // until end of line
+block comment      /* until matching */
+identifier         [a-z_][a-z0-9_]*
+number             -?[0-9]+(\.[0-9]+)?
+integer            [0-9]+
+fraction           [0-9]+ "/" [0-9]+
+version            [0-9]+ "." [0-9]+
+string             double-quoted UTF-8, with \" \\ \n \t escapes
+pitch              [A-G](b|#)?[0-9]+
+```
+
+Keywords are reserved and cannot be used as identifiers in version `0.1`: `language`, `working`, `tempo`, `meter`, `seed`, `daemon`, `sample`, `saw_sub`, `spell`, `pattern`, `notes`, `rite`, `bars`, `invoke`, `with`, `every`, `evoke`, and `wav`.
+
+Whitespace is insignificant except inside strings and pattern bodies.
+
+#### Required declarations
+
+A valid version `0.1` file must contain:
+
+* exactly one `language 0.1` declaration
+* exactly one `working`
+* exactly one `tempo`
+* exactly one `meter`
+* exactly one `seed`
+* at least one `rite`
+* exactly one `evoke wav`
+
+Duplicate declarations are errors unless this spec explicitly permits repetition. `daemon`, `spell`, and `rite` declarations may repeat, but their names must be unique within the working.
+
+#### Pattern expansion
+
+Pattern steps repeat from the start until the containing rite ends. Expansion truncates at the rite boundary and never schedules an event whose start beat is outside the rite.
+
+For rhythm patterns:
+
+```text
+x -> trigger event
+- -> rest
+space -> ignored
+```
+
+For note patterns:
+
+```text
+pitch -> note event
+-     -> rest
+|     -> ignored
+space -> separator
+```
+
+Any other pattern character is an error in version `0.1`.
+
+#### Event defaults
+
+All generated events include:
+
+```json
+{
+  "id": "stable event id",
+  "kind": "trigger or note",
+  "time_beats": 0,
+  "duration_beats": 0.25,
+  "daemon": "daemon_name",
+  "params": {},
+  "source": {
+    "file": "src/main.rite",
+    "line": 1,
+    "column": 1
+  }
+}
+```
+
+Sample trigger events use the invocation step duration as `duration_beats`; the backend may allow the sample tail to decay naturally. Synth note events use the invocation step duration as `duration_beats`.
+
+Default parameters:
+
+```text
+gain      0 dB
+pan       0
+highpass  none
+lowpass   none
+cutoff    1200 hz for saw_sub
+drive     0 for saw_sub
+tune      0 semitones for sample
+```
+
+Per-invocation parameters override daemon defaults for the generated events. Daemon defaults override built-in defaults.
+
+#### Sample resolution
+
+Version `0.1` sample paths are interpreted relative to the project root, which is the directory containing `malison.toml` if present, otherwise the current working directory. `~`, glob patterns, sample-library identifiers, and remote URLs are errors in version `0.1`.
+
+The compiler must fail during `check` if a referenced sample file does not exist.
+
+#### IR schema
+
+The `events` command emits deterministic JSON with this top-level shape:
+
+```json
+{
+  "language": "0.1",
+  "working": "First Working",
+  "tempo_bpm": 128,
+  "meter": [4, 4],
+  "seed": "first",
+  "duration_beats": 64,
+  "daemons": [],
+  "spells": [],
+  "rites": [],
+  "events": []
+}
+```
+
+JSON object keys should be emitted in a stable order. Event arrays are sorted by `time_beats`, then source order, then `kind`, then `id`.
+
+#### CLI behavior
+
+Commands return exit code `0` on success and nonzero on error.
+
+```text
+malison check <file>          validates and prints diagnostics only
+malison events <file>         validates and writes JSON events to stdout
+malison render <file>         validates, generates backend code, and renders audio
+```
+
+Diagnostics are written to stderr. `events` writes no non-JSON text to stdout. `render` uses the `evoke wav` path unless `--out` is provided, in which case the CLI option wins.
+
+By default, `render` refuses to overwrite an existing output file. `--force` allows overwrite.
+
+#### Render defaults
+
+Version `0.1` render defaults:
+
+```text
+backend       supercollider
+sample rate   48000
+bit depth     24
+channels      2
+tail          2.0 sec after the final event
+```
+
+The first backend should generate a SuperCollider source script and run it in non-realtime mode. Direct OSC score generation may replace this later without changing Malison semantics.
+
 ## 19. Non-Goals
 
 Malison is not initially:
@@ -1205,11 +1358,8 @@ Darkness should emerge from rhythm, timbre, harmony, pressure, space, degradatio
 ## 21. Open Questions
 
 1. Should `daemon` be public syntax, or should the less occult `instrument` be used in the first public release?
-2. Should sample identifiers be allowed in version `0.1`, or should the MVP require explicit file paths only?
-3. Should the first backend generate SuperCollider source code or direct non-realtime OSC score files?
-4. What exact ADSR defaults should `saw_sub` use?
-5. How should source maps represent events produced by transformed patterns in later profiles?
-6. What is the smallest useful dark-electronic demo track that proves the concept?
+2. How should source maps represent events produced by transformed patterns in later profiles?
+3. What is the smallest useful dark-electronic demo track that proves the concept?
 
 ## 22. Recommended Implementation Path
 
