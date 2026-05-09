@@ -188,7 +188,7 @@ impl<'a> Parser<'a> {
 
     fn parse_daemon(&mut self) -> Result<Daemon> {
         let span = self.previous_span();
-        let name = self.expect_ident_any()?;
+        let name = self.expect_decl_name("daemon")?;
         self.expect(TokenKind::Equal)?;
         let kind_name = self.expect_ident_any()?;
         let kind = match kind_name.as_str() {
@@ -223,7 +223,7 @@ impl<'a> Parser<'a> {
 
     fn parse_spell(&mut self) -> Result<Spell> {
         let span = self.previous_span();
-        let name = self.expect_ident_any()?;
+        let name = self.expect_decl_name("spell")?;
         self.expect(TokenKind::Equal)?;
         let pattern_kind = self.expect_ident_any()?;
         let kind = match pattern_kind.as_str() {
@@ -246,7 +246,7 @@ impl<'a> Parser<'a> {
     fn parse_rite(&mut self) -> Result<Rite> {
         let span = self.previous_span();
         let name = match self.peek_kind() {
-            Some(TokenKind::Ident(_)) => self.expect_ident_any()?,
+            Some(TokenKind::Ident(_)) => self.expect_decl_name("rite")?,
             Some(TokenKind::String(_)) => self.expect_string()?,
             _ => bail!("{}: expected rite name", self.location()),
         };
@@ -388,6 +388,15 @@ impl<'a> Parser<'a> {
         }
     }
 
+    fn expect_decl_name(&mut self, kind: &str) -> Result<String> {
+        let span = self.location();
+        let name = self.expect_ident_any()?;
+        if is_reserved_word(&name) {
+            bail!("{span}: reserved word `{name}` cannot be used as a {kind} name");
+        }
+        Ok(name)
+    }
+
     fn expect_string(&mut self) -> Result<String> {
         match self.advance() {
             Some(Token {
@@ -497,6 +506,30 @@ fn reject_duplicate<T>(name: &str, slot: &Option<T>) -> Result<()> {
     Ok(())
 }
 
+fn is_reserved_word(value: &str) -> bool {
+    matches!(
+        value,
+        "language"
+            | "working"
+            | "tempo"
+            | "meter"
+            | "seed"
+            | "daemon"
+            | "sample"
+            | "saw_sub"
+            | "spell"
+            | "pattern"
+            | "notes"
+            | "rite"
+            | "bars"
+            | "invoke"
+            | "with"
+            | "every"
+            | "evoke"
+            | "wav"
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -588,5 +621,32 @@ working "Future Syntax" {
             .unwrap_err()
             .to_string();
         assert!(error.contains("expected `invoke`, found `raise`"));
+    }
+
+    #[test]
+    fn rejects_reserved_words_as_declaration_names() {
+        let source = r#"
+language 0.1
+
+working "Reserved Names" {
+  tempo 120
+  meter 4/4
+  seed "seed"
+
+  daemon invoke = sample "samples/kick.wav"
+  spell kicks = pattern "x---"
+
+  rite main bars 1 {
+    invoke invoke with kicks every 1/16
+  }
+
+  evoke wav "renders/reserved.wav"
+}
+"#;
+
+        let error = parse_source(Path::new("fixture.rite"), source)
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains("reserved word `invoke` cannot be used as a daemon name"));
     }
 }
