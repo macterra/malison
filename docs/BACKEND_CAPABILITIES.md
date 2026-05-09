@@ -26,6 +26,7 @@ Supported sample features:
 * stereo WAV
 * `start_seconds`
 * `end_seconds`
+* explicit sample normalization with `normalize on`
 
 Supported pattern features:
 

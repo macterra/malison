@@ -1,27 +1,27 @@
 ---
 source: tests/cli.rs
-assertion_line: 184
+assertion_line: 292
 expression: "normalize_supercollider_script(&script, fixture.root.path())"
 ---
 (
 var opts, score;
 opts = ServerOptions.new.numOutputBusChannels_(2).sampleRate_(48000);
 score = Score([
-  [0.0, [\d_recv, SynthDef(\mal_sample, { |out=0, bufnum=0, amp=1, pan=0, rate=1, start=0, dur=999| var sig, env; env = Line.kr(1, 1, dur, doneAction:2); sig = PlayBuf.ar(1, bufnum, BufRateScale.kr(bufnum) * rate, startPos:start); Out.ar(out, Pan2.ar(sig * env * amp, pan)); }).asBytes]],
-  [0.0, [\d_recv, SynthDef(\mal_saw_sub, { |out=0, freq=55, dur=0.25, amp=0.3, pan=0, cutoff=1200, drive=0| var hold, env, sig, driven; hold = (dur - 0.19).max(0.001); env = EnvGen.kr(Env([0, 1, 0.65, 0.65, 0], [0.01, 0.18, hold, 0.08]), doneAction:2); sig = (Saw.ar(freq) * 0.72) + (Saw.ar(freq * 0.5) * 0.28); sig = RLPF.ar(sig, cutoff.clip(20, 20000), 0.35); driven = (sig * (1 + (drive * 12))).tanh; Out.ar(out, Pan2.ar(driven * env * amp, pan)); }).asBytes]],
+  [0.0, [\d_recv, SynthDef(\mal_sample, { |out=0, bufnum=0, amp=1, pan=0, rate=1, start=0, dur=999, normalize=0| var sig, env; env = Line.kr(1, 1, dur, doneAction:2); sig = PlayBuf.ar(1, bufnum, BufRateScale.kr(bufnum) * rate, startPos:start); sig = Select.ar(normalize > 0, [sig, Normalizer.ar(sig)]); Out.ar(out, Pan2.ar(sig * env * amp, pan)); }).asBytes]],
+  [0.0, [\d_recv, SynthDef(\mal_saw_sub, { |out=0, freq=55, dur=0.25, amp=0.3, pan=0, cutoff=1200, drive=0, attack=0.01, decay=0.18, sustain=0.65, release=0.08, detune=0, sub=0.28, resonance=0.35| var hold, env, sig, driven, detune_ratio; hold = (dur - attack - decay).max(0.001); env = EnvGen.kr(Env([0, 1, sustain, sustain, 0], [attack.max(0.001), decay.max(0.001), hold, release.max(0.001)]), doneAction:2); detune_ratio = 2.pow(detune / 1200); sig = (Saw.ar(freq / detune_ratio) * ((1 - sub) * 0.5)) + (Saw.ar(freq * detune_ratio) * ((1 - sub) * 0.5)) + (Saw.ar(freq * 0.5) * sub); sig = RLPF.ar(sig, cutoff.clip(20, 20000), resonance.clip(0.05, 1)); driven = (sig * (1 + (drive * 12))).tanh; Out.ar(out, Pan2.ar(driven * env * amp, pan)); }).asBytes]],
   [0.0, [\d_recv, SynthDef(\mal_drone, { |out=0, freq=43.65, dur=4, amp=0.18, pan=0, cutoff=900, drive=0| var env, sig, driven; env = EnvGen.kr(Env([0, 1, 1, 0], [0.5, (dur - 1).max(0.1), 0.5]), doneAction:2); sig = (SinOsc.ar(freq) * 0.55) + (Saw.ar(freq * 0.5) * 0.25) + (SinOsc.ar(freq * 1.5) * 0.2); sig = RLPF.ar(sig, cutoff.clip(20, 20000), 0.2); driven = (sig * (1 + (drive * 8))).tanh; Out.ar(out, Pan2.ar(driven * env * amp, pan)); }).asBytes]],
   [0.0, [\d_recv, SynthDef(\mal_noise_burst, { |out=0, dur=0.2, amp=0.3, pan=0, highpass=80, lowpass=9000, drive=0| var env, sig; env = EnvGen.kr(Env.perc(0.002, dur.max(0.01)), doneAction:2); sig = WhiteNoise.ar; sig = HPF.ar(LPF.ar(sig, lowpass.clip(20, 20000)), highpass.clip(20, 20000)); sig = (sig * (1 + (drive * 10))).tanh; Out.ar(out, Pan2.ar(sig * env * amp, pan)); }).asBytes]],
   [0.0, [\d_recv, SynthDef(\mal_swarm, { |out=0, freq=43.65, dur=4, amp=0.15, pan=0, cutoff=1400, drive=0| var env, sig; env = EnvGen.kr(Env([0, 1, 1, 0], [0.8, (dur - 1.6).max(0.1), 0.8]), doneAction:2); sig = Mix.fill(7, { |i| Saw.ar(freq * (1 + ((i - 3) * 0.004))) }) / 7; sig = RLPF.ar(sig, cutoff.clip(20, 20000), 0.25); sig = (sig * (1 + (drive * 8))).tanh; Out.ar(out, Pan2.ar(sig * env * amp, pan)); }).asBytes]],
   [0.0, [\d_recv, SynthDef(\mal_metal_hit, { |out=0, freq=110, decay=1, amp=0.35, pan=0, drive=0| var env, sig; env = EnvGen.kr(Env.perc(0.001, decay.max(0.02)), doneAction:2); sig = SinOsc.ar(freq * 1.0) + SinOsc.ar(freq * 2.71) + SinOsc.ar(freq * 4.39); sig = sig / 3; sig = (sig * (1 + (drive * 12))).tanh; Out.ar(out, Pan2.ar(sig * env * amp, pan)); }).asBytes]],
   [0.0, [\b_allocRead, 0, "<fixture>/samples/kick.wav"]],
-  [0.000000, [\s_new, \mal_sample, 1000, 0, 1, \bufnum, 0, \amp, 0.70794578, \pan, 0.00000000, \rate, 1.00000000, \start, 0, \dur, 0.05000000]],
-  [0.000000, [\s_new, \mal_saw_sub, 1001, 0, 1, \freq, 43.65352893, \dur, 0.23437500, \amp, 0.31622777, \pan, 0.00000000, \cutoff, 300.00000000, \drive, 0.30000000]],
-  [0.468750, [\s_new, \mal_sample, 1002, 0, 1, \bufnum, 0, \amp, 0.70794578, \pan, 0.00000000, \rate, 1.00000000, \start, 0, \dur, 0.05000000]],
-  [0.468750, [\s_new, \mal_saw_sub, 1003, 0, 1, \freq, 43.65352893, \dur, 0.23437500, \amp, 0.31622777, \pan, 0.00000000, \cutoff, 300.00000000, \drive, 0.30000000]],
-  [0.937500, [\s_new, \mal_sample, 1004, 0, 1, \bufnum, 0, \amp, 0.70794578, \pan, 0.00000000, \rate, 1.00000000, \start, 0, \dur, 0.05000000]],
-  [0.937500, [\s_new, \mal_saw_sub, 1005, 0, 1, \freq, 43.65352893, \dur, 0.23437500, \amp, 0.31622777, \pan, 0.00000000, \cutoff, 300.00000000, \drive, 0.30000000]],
-  [1.406250, [\s_new, \mal_sample, 1006, 0, 1, \bufnum, 0, \amp, 0.70794578, \pan, 0.00000000, \rate, 1.00000000, \start, 0, \dur, 0.05000000]],
-  [1.406250, [\s_new, \mal_saw_sub, 1007, 0, 1, \freq, 43.65352893, \dur, 0.23437500, \amp, 0.31622777, \pan, 0.00000000, \cutoff, 300.00000000, \drive, 0.30000000]],
+  [0.000000, [\s_new, \mal_sample, 1000, 0, 1, \bufnum, 0, \amp, 0.70794578, \pan, 0.00000000, \rate, 1.00000000, \start, 0, \dur, 0.05000000, \normalize, 0]],
+  [0.000000, [\s_new, \mal_saw_sub, 1001, 0, 1, \freq, 43.65352893, \dur, 0.23437500, \amp, 0.31622777, \pan, 0.00000000, \cutoff, 300.00000000, \drive, 0.30000000, \attack, 0.01000000, \decay, 0.18000000, \sustain, 0.65000000, \release, 0.08000000, \detune, 0.00000000, \sub, 0.28000000, \resonance, 0.35000000]],
+  [0.468750, [\s_new, \mal_sample, 1002, 0, 1, \bufnum, 0, \amp, 0.70794578, \pan, 0.00000000, \rate, 1.00000000, \start, 0, \dur, 0.05000000, \normalize, 0]],
+  [0.468750, [\s_new, \mal_saw_sub, 1003, 0, 1, \freq, 43.65352893, \dur, 0.23437500, \amp, 0.31622777, \pan, 0.00000000, \cutoff, 300.00000000, \drive, 0.30000000, \attack, 0.01000000, \decay, 0.18000000, \sustain, 0.65000000, \release, 0.08000000, \detune, 0.00000000, \sub, 0.28000000, \resonance, 0.35000000]],
+  [0.937500, [\s_new, \mal_sample, 1004, 0, 1, \bufnum, 0, \amp, 0.70794578, \pan, 0.00000000, \rate, 1.00000000, \start, 0, \dur, 0.05000000, \normalize, 0]],
+  [0.937500, [\s_new, \mal_saw_sub, 1005, 0, 1, \freq, 43.65352893, \dur, 0.23437500, \amp, 0.31622777, \pan, 0.00000000, \cutoff, 300.00000000, \drive, 0.30000000, \attack, 0.01000000, \decay, 0.18000000, \sustain, 0.65000000, \release, 0.08000000, \detune, 0.00000000, \sub, 0.28000000, \resonance, 0.35000000]],
+  [1.406250, [\s_new, \mal_sample, 1006, 0, 1, \bufnum, 0, \amp, 0.70794578, \pan, 0.00000000, \rate, 1.00000000, \start, 0, \dur, 0.05000000, \normalize, 0]],
+  [1.406250, [\s_new, \mal_saw_sub, 1007, 0, 1, \freq, 43.65352893, \dur, 0.23437500, \amp, 0.31622777, \pan, 0.00000000, \cutoff, 300.00000000, \drive, 0.30000000, \attack, 0.01000000, \decay, 0.18000000, \sustain, 0.65000000, \release, 0.08000000, \detune, 0.00000000, \sub, 0.28000000, \resonance, 0.35000000]],
   [3.875000, [\c_set, 0, 0]]
 ]);
 score.recordNRT(

@@ -37,7 +37,7 @@ To render through SuperCollider:
 cargo run -- render examples/first-working/main.rite --backend supercollider --force
 ```
 
-`render --backend supercollider --dry-run` emits the generated SuperCollider NRT score script.
+`render --backend supercollider --dry-run` emits the generated SuperCollider NRT score script. Add `--keep-backend-files` to retain the generated `.scd` file under the project build directory.
 
 ## Development
 

@@ -296,6 +296,28 @@ fn render_supercollider_dry_run_outputs_score() {
 }
 
 #[test]
+fn render_supercollider_dry_run_can_keep_backend_script() {
+    let fixture = Fixture::new();
+    let script = fixture.root.path().join("build/malison-supercollider.scd");
+
+    Command::cargo_bin("malison")
+        .unwrap()
+        .arg("render")
+        .arg(fixture.main_rite())
+        .arg("--backend")
+        .arg("supercollider")
+        .arg("--dry-run")
+        .arg("--keep-backend-files")
+        .assert()
+        .success();
+
+    assert!(script.exists());
+    let script = fs::read_to_string(script).unwrap();
+    assert!(script.contains("Score(["));
+    assert!(script.contains("SynthDef(\\mal_sample"));
+}
+
+#[test]
 fn scry_outputs_human_readable_summary() {
     let fixture = Fixture::new();
 

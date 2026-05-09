@@ -1122,12 +1122,31 @@ fn validate_params(owner: &str, kind: DaemonKind, params: &[crate::parser::Param
         let allowed = match kind {
             DaemonKind::Sample => matches!(
                 param.name.as_str(),
-                "gain" | "pan" | "tune" | "highpass" | "lowpass" | "start" | "end" | "out"
+                "gain"
+                    | "pan"
+                    | "tune"
+                    | "highpass"
+                    | "lowpass"
+                    | "start"
+                    | "end"
+                    | "normalize"
+                    | "out"
             ),
             DaemonKind::SawSub => {
                 matches!(
                     param.name.as_str(),
-                    "gain" | "pan" | "cutoff" | "drive" | "out"
+                    "gain"
+                        | "pan"
+                        | "cutoff"
+                        | "drive"
+                        | "attack"
+                        | "decay"
+                        | "sustain"
+                        | "release"
+                        | "detune"
+                        | "sub"
+                        | "resonance"
+                        | "out"
                 )
             }
             DaemonKind::Drone => {
@@ -1176,6 +1195,12 @@ fn validate_param_value(owner: &str, name: &str, value: &Value) -> Result<()> {
         }
         bail!("`{owner}` parameter `out` must be a circle name");
     }
+    if name == "normalize" {
+        if matches!(value, Value::String(value) if value == "on" || value == "off") {
+            return Ok(());
+        }
+        bail!("`{owner}` parameter `normalize` must be `on` or `off`");
+    }
     let number = match value {
         Value::Number(number) => *number,
         _ => bail!("`{owner}` parameter `{name}` must be numeric"),
@@ -1193,11 +1218,23 @@ fn validate_param_value(owner: &str, name: &str, value: &Value) -> Result<()> {
         "voices" if number < 1.0 || number.fract() != 0.0 => {
             bail!("`{owner}` parameter `voices` must be a positive integer");
         }
-        "spread" | "decay" if number <= 0.0 => {
+        "spread" if number <= 0.0 => {
             bail!("`{owner}` parameter `{name}` must be positive");
         }
         "start" | "end" if number < 0.0 => {
             bail!("`{owner}` parameter `{name}` must be non-negative");
+        }
+        "attack" | "decay" | "release" if number < 0.0 => {
+            bail!("`{owner}` parameter `{name}` must be non-negative");
+        }
+        "sustain" | "sub" if !(0.0..=1.0).contains(&number) => {
+            bail!("`{owner}` parameter `{name}` must be in [0, 1]");
+        }
+        "detune" if number < 0.0 => {
+            bail!("`{owner}` parameter `detune` must be non-negative");
+        }
+        "resonance" if !(0.05..=1.0).contains(&number) => {
+            bail!("`{owner}` parameter `resonance` must be in [0.05, 1]");
         }
         _ => {}
     }
@@ -1236,9 +1273,13 @@ fn canonical_param_name(name: &str) -> String {
         "lowpass" => "lowpass_hz",
         "start" => "start_seconds",
         "end" => "end_seconds",
-        "tune" => "tune_semitones",
-        "spread" => "spread_cents",
+        "attack" => "attack_seconds",
         "decay" => "decay_seconds",
+        "release" => "release_seconds",
+        "tune" => "tune_semitones",
+        "detune" => "detune_cents",
+        "sub" => "sub_level",
+        "spread" => "spread_cents",
         other => other,
     }
     .to_string()

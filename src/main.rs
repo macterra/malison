@@ -67,6 +67,8 @@ enum Command {
         #[arg(long)]
         dry_run: bool,
         #[arg(long)]
+        keep_backend_files: bool,
+        #[arg(long)]
         force: bool,
     },
 }
@@ -178,6 +180,7 @@ fn run() -> Result<()> {
             sample_rate,
             bit_depth,
             dry_run,
+            keep_backend_files,
             force,
         } => {
             let compiled = load_and_compile(&file)?;
@@ -212,6 +215,9 @@ fn run() -> Result<()> {
                         sample_rate,
                         bit_depth,
                     )?;
+                    if keep_backend_files {
+                        write_supercollider_script_artifact(&compiled, &script)?;
+                    }
                     println!("{script}");
                 } else {
                     println!(
@@ -234,17 +240,39 @@ fn run() -> Result<()> {
             compiler::validate_output_path(&out_path)?;
 
             if backend == "supercollider" {
+                let script_artifact = if keep_backend_files {
+                    Some(supercollider_script_artifact_path(&compiled))
+                } else {
+                    None
+                };
                 return renderer::render_supercollider(
                     &compiled,
                     &out_path,
                     sample_rate,
                     bit_depth,
+                    script_artifact.as_deref(),
                 );
             }
 
             renderer::render_wav(&compiled, &out_path, sample_rate, bit_depth)
         }
     }
+}
+
+fn supercollider_script_artifact_path(compiled: &compiler::CompiledWorking) -> PathBuf {
+    compiled.build_root.join("malison-supercollider.scd")
+}
+
+fn write_supercollider_script_artifact(
+    compiled: &compiler::CompiledWorking,
+    script: &str,
+) -> Result<()> {
+    let path = supercollider_script_artifact_path(compiled);
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent)
+            .with_context(|| format!("failed to create `{}`", parent.display()))?;
+    }
+    fs::write(&path, script).with_context(|| format!("failed to write `{}`", path.display()))
 }
 
 fn graph_dot(graph: &ir::IrGraph) -> String {

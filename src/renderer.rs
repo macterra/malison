@@ -36,7 +36,13 @@ pub fn backend_capabilities() -> BackendCapabilities {
         "swarm",
         "metal_hit",
     ];
-    let sample_features = vec!["mono_wav", "stereo_wav", "start_seconds", "end_seconds"];
+    let sample_features = vec![
+        "mono_wav",
+        "stereo_wav",
+        "start_seconds",
+        "end_seconds",
+        "explicit_normalize",
+    ];
     let pattern_features = vec![
         "rhythm",
         "notes",
@@ -133,6 +139,7 @@ pub fn render_supercollider(
     out_path: &Path,
     sample_rate: u32,
     bit_depth: u16,
+    keep_script_path: Option<&Path>,
 ) -> Result<()> {
     if !matches!(bit_depth, 16 | 24 | 32) {
         bail!("unsupported bit depth `{bit_depth}`; expected 16, 24, or 32");
@@ -146,6 +153,17 @@ pub fn render_supercollider(
     }
 
     let script = supercollider_script(compiled, out_path, sample_rate, bit_depth)?;
+    if let Some(keep_script_path) = keep_script_path {
+        if let Some(parent) = keep_script_path
+            .parent()
+            .filter(|path| !path.as_os_str().is_empty())
+        {
+            fs::create_dir_all(parent)
+                .with_context(|| format!("failed to create `{}`", parent.display()))?;
+        }
+        fs::write(keep_script_path, &script)
+            .with_context(|| format!("failed to write `{}`", keep_script_path.display()))?;
+    }
     let script_path = temp_script_path();
     fs::write(&script_path, script)
         .with_context(|| format!("failed to write `{}`", script_path.display()))?;
@@ -198,8 +216,8 @@ pub fn supercollider_script(
     }
 
     let mut score_lines = vec![
-        "[0.0, [\\d_recv, SynthDef(\\mal_sample, { |out=0, bufnum=0, amp=1, pan=0, rate=1, start=0, dur=999| var sig, env; env = Line.kr(1, 1, dur, doneAction:2); sig = PlayBuf.ar(1, bufnum, BufRateScale.kr(bufnum) * rate, startPos:start); Out.ar(out, Pan2.ar(sig * env * amp, pan)); }).asBytes]]".to_string(),
-        "[0.0, [\\d_recv, SynthDef(\\mal_saw_sub, { |out=0, freq=55, dur=0.25, amp=0.3, pan=0, cutoff=1200, drive=0| var hold, env, sig, driven; hold = (dur - 0.19).max(0.001); env = EnvGen.kr(Env([0, 1, 0.65, 0.65, 0], [0.01, 0.18, hold, 0.08]), doneAction:2); sig = (Saw.ar(freq) * 0.72) + (Saw.ar(freq * 0.5) * 0.28); sig = RLPF.ar(sig, cutoff.clip(20, 20000), 0.35); driven = (sig * (1 + (drive * 12))).tanh; Out.ar(out, Pan2.ar(driven * env * amp, pan)); }).asBytes]]".to_string(),
+        "[0.0, [\\d_recv, SynthDef(\\mal_sample, { |out=0, bufnum=0, amp=1, pan=0, rate=1, start=0, dur=999, normalize=0| var sig, env; env = Line.kr(1, 1, dur, doneAction:2); sig = PlayBuf.ar(1, bufnum, BufRateScale.kr(bufnum) * rate, startPos:start); sig = Select.ar(normalize > 0, [sig, Normalizer.ar(sig)]); Out.ar(out, Pan2.ar(sig * env * amp, pan)); }).asBytes]]".to_string(),
+        "[0.0, [\\d_recv, SynthDef(\\mal_saw_sub, { |out=0, freq=55, dur=0.25, amp=0.3, pan=0, cutoff=1200, drive=0, attack=0.01, decay=0.18, sustain=0.65, release=0.08, detune=0, sub=0.28, resonance=0.35| var hold, env, sig, driven, detune_ratio; hold = (dur - attack - decay).max(0.001); env = EnvGen.kr(Env([0, 1, sustain, sustain, 0], [attack.max(0.001), decay.max(0.001), hold, release.max(0.001)]), doneAction:2); detune_ratio = 2.pow(detune / 1200); sig = (Saw.ar(freq / detune_ratio) * ((1 - sub) * 0.5)) + (Saw.ar(freq * detune_ratio) * ((1 - sub) * 0.5)) + (Saw.ar(freq * 0.5) * sub); sig = RLPF.ar(sig, cutoff.clip(20, 20000), resonance.clip(0.05, 1)); driven = (sig * (1 + (drive * 12))).tanh; Out.ar(out, Pan2.ar(driven * env * amp, pan)); }).asBytes]]".to_string(),
         "[0.0, [\\d_recv, SynthDef(\\mal_drone, { |out=0, freq=43.65, dur=4, amp=0.18, pan=0, cutoff=900, drive=0| var env, sig, driven; env = EnvGen.kr(Env([0, 1, 1, 0], [0.5, (dur - 1).max(0.1), 0.5]), doneAction:2); sig = (SinOsc.ar(freq) * 0.55) + (Saw.ar(freq * 0.5) * 0.25) + (SinOsc.ar(freq * 1.5) * 0.2); sig = RLPF.ar(sig, cutoff.clip(20, 20000), 0.2); driven = (sig * (1 + (drive * 8))).tanh; Out.ar(out, Pan2.ar(driven * env * amp, pan)); }).asBytes]]".to_string(),
         "[0.0, [\\d_recv, SynthDef(\\mal_noise_burst, { |out=0, dur=0.2, amp=0.3, pan=0, highpass=80, lowpass=9000, drive=0| var env, sig; env = EnvGen.kr(Env.perc(0.002, dur.max(0.01)), doneAction:2); sig = WhiteNoise.ar; sig = HPF.ar(LPF.ar(sig, lowpass.clip(20, 20000)), highpass.clip(20, 20000)); sig = (sig * (1 + (drive * 10))).tanh; Out.ar(out, Pan2.ar(sig * env * amp, pan)); }).asBytes]]".to_string(),
         "[0.0, [\\d_recv, SynthDef(\\mal_swarm, { |out=0, freq=43.65, dur=4, amp=0.15, pan=0, cutoff=1400, drive=0| var env, sig; env = EnvGen.kr(Env([0, 1, 1, 0], [0.8, (dur - 1.6).max(0.1), 0.8]), doneAction:2); sig = Mix.fill(7, { |i| Saw.ar(freq * (1 + ((i - 3) * 0.004))) }) / 7; sig = RLPF.ar(sig, cutoff.clip(20, 20000), 0.25); sig = (sig * (1 + (drive * 8))).tanh; Out.ar(out, Pan2.ar(sig * env * amp, pan)); }).asBytes]]".to_string(),
@@ -239,6 +257,16 @@ pub fn supercollider_script(
                     .clamp(-1.0, 1.0);
                 let tune = param_f64(&event.params, "tune_semitones").unwrap_or(0.0);
                 let rate = 2.0_f64.powf(tune / 12.0);
+                let normalize = if event
+                    .params
+                    .get("normalize")
+                    .and_then(|value| value.as_str())
+                    == Some("on")
+                {
+                    1
+                } else {
+                    0
+                };
                 let bufnum = sample_buffers[event.daemon.as_str()];
                 let sample_path = daemon.sample.as_deref().ok_or_else(|| {
                     anyhow::anyhow!("sample daemon `{}` has no sample path", daemon.id)
@@ -251,7 +279,7 @@ pub fn supercollider_script(
                 let dur = ((end_seconds - start_seconds).max(0.0) / rate.abs().max(0.001))
                     .min(sample_info.frames as f64 / sample_info.sample_rate as f64);
                 score_lines.push(format!(
-                    "[{time:.6}, [\\s_new, \\mal_sample, {node_id}, 0, 1, \\bufnum, {bufnum}, \\amp, {amp:.8}, \\pan, {pan:.8}, \\rate, {rate:.8}, \\start, {start_frame:.0}, \\dur, {dur:.8}]]"
+                    "[{time:.6}, [\\s_new, \\mal_sample, {node_id}, 0, 1, \\bufnum, {bufnum}, \\amp, {amp:.8}, \\pan, {pan:.8}, \\rate, {rate:.8}, \\start, {start_frame:.0}, \\dur, {dur:.8}, \\normalize, {normalize}]]"
                 ));
                 node_id += 1;
             }
@@ -268,8 +296,15 @@ pub fn supercollider_script(
                     let drive = param_f64(&event.params, "drive")
                         .unwrap_or(0.0)
                         .clamp(0.0, 1.0);
+                    let attack = param_f64(&event.params, "attack_seconds").unwrap_or(0.01);
+                    let decay = param_f64(&event.params, "decay_seconds").unwrap_or(0.18);
+                    let sustain = param_f64(&event.params, "sustain").unwrap_or(0.65);
+                    let release = param_f64(&event.params, "release_seconds").unwrap_or(0.08);
+                    let detune = param_f64(&event.params, "detune_cents").unwrap_or(0.0);
+                    let sub = param_f64(&event.params, "sub_level").unwrap_or(0.28);
+                    let resonance = param_f64(&event.params, "resonance").unwrap_or(0.35);
                     score_lines.push(format!(
-                        "[{time:.6}, [\\s_new, \\mal_saw_sub, {node_id}, 0, 1, \\freq, {freq:.8}, \\dur, {dur:.8}, \\amp, {amp:.8}, \\pan, {pan:.8}, \\cutoff, {cutoff:.8}, \\drive, {drive:.8}]]"
+                        "[{time:.6}, [\\s_new, \\mal_saw_sub, {node_id}, 0, 1, \\freq, {freq:.8}, \\dur, {dur:.8}, \\amp, {amp:.8}, \\pan, {pan:.8}, \\cutoff, {cutoff:.8}, \\drive, {drive:.8}, \\attack, {attack:.8}, \\decay, {decay:.8}, \\sustain, {sustain:.8}, \\release, {release:.8}, \\detune, {detune:.8}, \\sub, {sub:.8}, \\resonance, {resonance:.8}]]"
                     ));
                     node_id += 1;
                 }
@@ -397,7 +432,15 @@ fn render_sample(
         .ok_or_else(|| anyhow::anyhow!("sample daemon `{}` has no sample path", daemon.id))?;
     let path = resolve_sample_path(compiled, sample_path);
     let sample = read_wav(&path, sample_rate)?;
-    let sample = slice_sample(&sample, event, sample_rate);
+    let mut sample = slice_sample(&sample, event, sample_rate);
+    if event
+        .params
+        .get("normalize")
+        .and_then(|value| value.as_str())
+        == Some("on")
+    {
+        normalize_frames(&mut sample);
+    }
     let start = seconds_to_frame(
         beats_to_seconds(event.time_beats, compiled.ir.tempo_bpm),
         sample_rate,
@@ -422,13 +465,31 @@ fn slice_sample(sample: &[[f32; 2]], event: &IrEvent, sample_rate: u32) -> Vec<[
     sample[start..end].to_vec()
 }
 
+fn normalize_frames(sample: &mut [[f32; 2]]) {
+    let peak = sample
+        .iter()
+        .flat_map(|frame| frame.iter())
+        .map(|value| value.abs())
+        .fold(0.0_f32, f32::max);
+    if peak > 0.0 {
+        let gain = 1.0 / peak;
+        for frame in sample {
+            frame[0] *= gain;
+            frame[1] *= gain;
+        }
+    }
+}
+
 fn render_saw_sub(event: &IrEvent, tempo_bpm: &f64, sample_rate: u32, buffer: &mut [[f32; 2]]) {
     let Some(pitch) = &event.pitch else {
         return;
     };
     let start = seconds_to_frame(beats_to_seconds(event.time_beats, *tempo_bpm), sample_rate);
     let note_seconds = beats_to_seconds(event.duration_beats, *tempo_bpm);
-    let release = 0.08_f64;
+    let attack = param_f64(&event.params, "attack_seconds").unwrap_or(0.01);
+    let decay = param_f64(&event.params, "decay_seconds").unwrap_or(0.18);
+    let sustain = param_f64(&event.params, "sustain").unwrap_or(0.65);
+    let release = param_f64(&event.params, "release_seconds").unwrap_or(0.08);
     let frames = ((note_seconds + release) * sample_rate as f64).ceil() as usize;
     let freq = 440.0_f32 * 2.0_f32.powf((pitch.midi as f32 - 69.0) / 12.0);
     let gain =
@@ -438,21 +499,30 @@ fn render_saw_sub(event: &IrEvent, tempo_bpm: &f64, sample_rate: u32, buffer: &m
         .unwrap_or(0.0)
         .clamp(0.0, 1.0) as f32;
     let cutoff = param_f64(&event.params, "cutoff_hz").unwrap_or(1200.0) as f32;
+    let detune = param_f64(&event.params, "detune_cents").unwrap_or(0.0) as f32;
+    let sub_level = param_f64(&event.params, "sub_level").unwrap_or(0.28) as f32;
+    let resonance = param_f64(&event.params, "resonance").unwrap_or(0.35) as f32;
     let mut lowpass = OnePoleLowpass::new(cutoff, sample_rate as f32);
     let mut frames_out = Vec::with_capacity(frames);
 
     for frame in 0..frames {
         let t = frame as f32 / sample_rate as f32;
-        let env = adsr(t as f64, note_seconds) as f32;
-        let saw = 2.0 * ((freq * t) - (freq * t).floor()) - 1.0;
+        let env = adsr(t as f64, note_seconds, attack, decay, sustain, release) as f32;
+        let detune_ratio = 2.0_f32.powf(detune / 1200.0);
+        let low_saw_freq = freq / detune_ratio.max(0.001);
+        let high_saw_freq = freq * detune_ratio;
+        let saw_low = 2.0 * ((low_saw_freq * t) - (low_saw_freq * t).floor()) - 1.0;
+        let saw_high = 2.0 * ((high_saw_freq * t) - (high_saw_freq * t).floor()) - 1.0;
         let sub_freq = freq * 0.5;
         let sub = 2.0 * ((sub_freq * t) - (sub_freq * t).floor()) - 1.0;
-        let mut value = (saw * 0.72 + sub * 0.28) * env;
+        let saw_level = (1.0 - sub_level).max(0.0);
+        let mut value = ((saw_low + saw_high) * 0.5 * saw_level + sub * sub_level) * env;
         if drive > 0.0 {
             let amount = 1.0 + drive * 12.0;
             value = (value * amount).tanh() / amount.tanh();
         }
-        value = lowpass.process(value) * gain;
+        let resonant = value + lowpass.state() * resonance.clamp(0.05, 1.0) * 0.15;
+        value = lowpass.process(resonant) * gain;
         frames_out.push([value, value]);
     }
 
@@ -697,11 +767,11 @@ fn mix_frames(buffer: &mut [[f32; 2]], start: usize, source: &[[f32; 2]], gain: 
     }
 }
 
-fn adsr(t: f64, note_seconds: f64) -> f64 {
-    let attack = 0.01;
-    let decay = 0.18;
-    let sustain = 0.65;
-    let release = 0.08;
+fn adsr(t: f64, note_seconds: f64, attack: f64, decay: f64, sustain: f64, release: f64) -> f64 {
+    let attack = attack.max(0.001);
+    let decay = decay.max(0.001);
+    let sustain = sustain.clamp(0.0, 1.0);
+    let release = release.max(0.001);
     if t < attack {
         t / attack
     } else if t < attack + decay {
@@ -733,6 +803,10 @@ impl OnePoleLowpass {
 
     fn process(&mut self, input: f32) -> f32 {
         self.state += self.alpha * (input - self.state);
+        self.state
+    }
+
+    fn state(&self) -> f32 {
         self.state
     }
 }
@@ -828,8 +902,18 @@ working "Render Test" {
   meter 4/4
   seed "first"
 
-  daemon kick = sample "samples/kick.wav" { gain -3 }
-  daemon bass = saw_sub { cutoff 300 drive 0.3 }
+  daemon kick = sample "samples/kick.wav" { gain -3 normalize on }
+  daemon bass = saw_sub {
+    cutoff 300
+    drive 0.3
+    attack 0.02
+    decay 0.12
+    sustain 0.5
+    release 0.1
+    detune 7
+    sub 0.35
+    resonance 0.4
+  }
 
   spell kicks = pattern "x---"
   spell bassline = notes "F1 -"
@@ -880,8 +964,18 @@ working "SC Test" {
   meter 4/4
   seed "first"
 
-  daemon kick = sample "samples/kick.wav" { gain -3 }
-  daemon bass = saw_sub { cutoff 300 drive 0.3 }
+  daemon kick = sample "samples/kick.wav" { gain -3 normalize on }
+  daemon bass = saw_sub {
+    cutoff 300
+    drive 0.3
+    attack 0.02
+    decay 0.12
+    sustain 0.5
+    release 0.1
+    detune 7
+    sub 0.35
+    resonance 0.4
+  }
 
   spell kicks = pattern "x---"
   spell bassline = notes "F1 -"
@@ -912,6 +1006,10 @@ working "SC Test" {
         assert!(script.contains("SynthDef(\\mal_sample"));
         assert!(script.contains("SynthDef(\\mal_saw_sub"));
         assert!(script.contains("\\b_allocRead"));
+        assert!(script.contains("\\normalize, 1"));
+        assert!(script.contains("\\detune, 7.00000000"));
+        assert!(script.contains("\\sub, 0.35000000"));
+        assert!(script.contains("\\resonance, 0.40000000"));
         assert!(script.contains("sampleFormat: \"int24\""));
 
         fs::remove_dir_all(&root).unwrap();

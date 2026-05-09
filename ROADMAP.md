@@ -213,7 +213,7 @@ Purpose: make the sonic palette worth composing with.
 * Decide on sample-rate conversion strategy. Done; version `0.1` rejects sample-rate mismatches instead of resampling.
 * Add better errors for unsupported sample formats. Done through explicit WAV validation and contextual reader errors.
 * Add sample start/end offsets. Done for Rust and represented in SC score generation.
-* Add sample amplitude normalization only if explicitly requested.
+* Add sample amplitude normalization only if explicitly requested. Done with `normalize on`.
 * Add sample kits after individual sample playback is solid.
 
 ### Built-In Synths
@@ -227,10 +227,10 @@ Implement the next smallest useful archetypes:
 
 Improve `saw_sub`:
 
-* configurable ADSR
-* detune
-* sub level
-* filter resonance
+* configurable ADSR. Done.
+* detune. Done.
+* sub level. Done.
+* filter resonance. Done.
 * safer anti-aliasing or band-limited oscillator where practical
 
 ### Backend Parity
@@ -238,7 +238,7 @@ Improve `saw_sub`:
 * Maintain a backend capability table for Rust and SuperCollider. Done.
 * Add backend parity tests where exact waveform equality is not required but event support is. Done through shared capability metadata and render/script tests.
 * Make unsupported backend features fail before render starts. Done for backend selection and advertised unsupported capability metadata.
-* Add optional retention of generated SC scripts for debugging.
+* Add optional retention of generated SC scripts for debugging. Done with `render --keep-backend-files`.
 
 ### Exit Criteria
 

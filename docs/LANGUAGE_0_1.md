@@ -42,6 +42,11 @@ Supported rite statements:
 
 `banish` emits a lifecycle event at the start of its rite and truncates any already-running continuous event for the named daemon. Automation curves may be `linear`, `exponential`, or `stepped`; exponential curves require positive endpoints.
 
+Common daemon parameters:
+
+* Samples: `gain`, `pan`, `tune`, `start`, `end`, `normalize on|off`
+* `saw_sub`: `gain`, `pan`, `cutoff`, `drive`, `attack`, `decay`, `sustain`, `release`, `detune`, `sub`, `resonance`
+
 Supported pattern transforms:
 
 * `.rotate(steps)`
