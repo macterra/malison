@@ -1,0 +1,32 @@
+---
+source: tests/cli.rs
+assertion_line: 109
+expression: "normalize_supercollider_script(&script, fixture.root.path())"
+---
+(
+var opts, score;
+opts = ServerOptions.new.numOutputBusChannels_(2).sampleRate_(48000);
+score = Score([
+  [0.0, [\d_recv, SynthDef(\mal_sample, { |out=0, bufnum=0, amp=1, pan=0, rate=1| var sig; sig = PlayBuf.ar(1, bufnum, BufRateScale.kr(bufnum) * rate, doneAction:2); Out.ar(out, Pan2.ar(sig * amp, pan)); }).asBytes]],
+  [0.0, [\d_recv, SynthDef(\mal_saw_sub, { |out=0, freq=55, dur=0.25, amp=0.3, pan=0, cutoff=1200, drive=0| var hold, env, sig, driven; hold = (dur - 0.19).max(0.001); env = EnvGen.kr(Env([0, 1, 0.65, 0.65, 0], [0.01, 0.18, hold, 0.08]), doneAction:2); sig = (Saw.ar(freq) * 0.72) + (Saw.ar(freq * 0.5) * 0.28); sig = RLPF.ar(sig, cutoff.clip(20, 20000), 0.35); driven = (sig * (1 + (drive * 12))).tanh; Out.ar(out, Pan2.ar(driven * env * amp, pan)); }).asBytes]],
+  [0.0, [\b_allocRead, 0, "<fixture>/samples/kick.wav"]],
+  [0.000000, [\s_new, \mal_sample, 1000, 0, 1, \bufnum, 0, \amp, 0.70794578, \pan, 0.00000000, \rate, 1.00000000]],
+  [0.000000, [\s_new, \mal_saw_sub, 1001, 0, 1, \freq, 43.65352893, \dur, 0.23437500, \amp, 0.31622777, \pan, 0.00000000, \cutoff, 300.00000000, \drive, 0.30000000]],
+  [0.468750, [\s_new, \mal_sample, 1002, 0, 1, \bufnum, 0, \amp, 0.70794578, \pan, 0.00000000, \rate, 1.00000000]],
+  [0.468750, [\s_new, \mal_saw_sub, 1003, 0, 1, \freq, 43.65352893, \dur, 0.23437500, \amp, 0.31622777, \pan, 0.00000000, \cutoff, 300.00000000, \drive, 0.30000000]],
+  [0.937500, [\s_new, \mal_sample, 1004, 0, 1, \bufnum, 0, \amp, 0.70794578, \pan, 0.00000000, \rate, 1.00000000]],
+  [0.937500, [\s_new, \mal_saw_sub, 1005, 0, 1, \freq, 43.65352893, \dur, 0.23437500, \amp, 0.31622777, \pan, 0.00000000, \cutoff, 300.00000000, \drive, 0.30000000]],
+  [1.406250, [\s_new, \mal_sample, 1006, 0, 1, \bufnum, 0, \amp, 0.70794578, \pan, 0.00000000, \rate, 1.00000000]],
+  [1.406250, [\s_new, \mal_saw_sub, 1007, 0, 1, \freq, 43.65352893, \dur, 0.23437500, \amp, 0.31622777, \pan, 0.00000000, \cutoff, 300.00000000, \drive, 0.30000000]],
+  [3.875000, [\c_set, 0, 0]]
+]);
+score.recordNRT(
+  outputFilePath: "<fixture>/renders/cli-test.wav",
+  sampleRate: 48000,
+  headerFormat: "WAV",
+  sampleFormat: "int24",
+  options: opts,
+  duration: 3.875000,
+  action: { 0.exit }
+);
+)

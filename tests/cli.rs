@@ -90,7 +90,7 @@ fn render_rust_backend_writes_wav() {
 fn render_supercollider_dry_run_outputs_score() {
     let fixture = Fixture::new();
 
-    Command::cargo_bin("malison")
+    let output = Command::cargo_bin("malison")
         .unwrap()
         .arg("render")
         .arg(fixture.main_rite())
@@ -100,7 +100,42 @@ fn render_supercollider_dry_run_outputs_score() {
         .assert()
         .success()
         .stdout(predicate::str::contains("Score(["))
-        .stdout(predicate::str::contains("SynthDef(\\mal_saw_sub"));
+        .stdout(predicate::str::contains("SynthDef(\\mal_saw_sub"))
+        .get_output()
+        .stdout
+        .clone();
+
+    let script = String::from_utf8(output).unwrap();
+    insta::assert_snapshot!(
+        "supercollider_dry_run",
+        normalize_supercollider_script(&script, fixture.root.path())
+    );
+}
+
+#[test]
+fn scry_outputs_human_readable_summary() {
+    let fixture = Fixture::new();
+
+    Command::cargo_bin("malison")
+        .unwrap()
+        .arg("scry")
+        .arg(fixture.main_rite())
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("working: CLI Test"))
+        .stdout(predicate::str::contains("events: 8"))
+        .stdout(predicate::str::contains("rite main"))
+        .stdout(predicate::str::contains("note    bass"));
+}
+
+#[test]
+fn version_flag_reports_package_version() {
+    Command::cargo_bin("malison")
+        .unwrap()
+        .arg("--version")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains(env!("CARGO_PKG_VERSION")));
 }
 
 #[test]
@@ -115,9 +150,7 @@ fn rejects_non_rite_source_extension() {
         .arg(bad)
         .assert()
         .failure()
-        .stderr(predicate::str::contains(
-            "source files must use the .rite extension",
-        ));
+        .stderr(predicate::str::contains("must use the .rite extension"));
 }
 
 struct Fixture {
@@ -208,4 +241,8 @@ fn normalize_source_files(value: &mut serde_json::Value) {
         }
         _ => {}
     }
+}
+
+fn normalize_supercollider_script(script: &str, root: &Path) -> String {
+    script.replace(&root.display().to_string(), "<fixture>")
 }

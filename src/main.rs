@@ -14,6 +14,7 @@ use parser::parse_source;
 
 #[derive(Debug, Parser)]
 #[command(name = "malison")]
+#[command(version)]
 #[command(about = "Executable scores for dark electronic music")]
 struct Cli {
     #[command(subcommand)]
@@ -28,6 +29,8 @@ enum Command {
     Ir { file: PathBuf },
     /// Validate and print deterministic JSON events.
     Events { file: PathBuf },
+    /// Inspect event expansion in a human-readable form.
+    Scry { file: PathBuf },
     /// Compile and render audio.
     Render {
         file: PathBuf,
@@ -74,6 +77,11 @@ fn run() -> Result<()> {
         Command::Events { file } => {
             let compiled = load_and_compile(&file)?;
             println!("{}", serde_json::to_string_pretty(&compiled.ir)?);
+            Ok(())
+        }
+        Command::Scry { file } => {
+            let compiled = load_and_compile(&file)?;
+            print_scry(&compiled);
             Ok(())
         }
         Command::Render {
@@ -144,11 +152,49 @@ fn run() -> Result<()> {
 
 fn load_and_compile(path: &Path) -> Result<compiler::CompiledWorking> {
     if path.extension().and_then(|ext| ext.to_str()) != Some("rite") {
-        anyhow::bail!("source files must use the .rite extension");
+        anyhow::bail!(
+            "source file `{}` must use the .rite extension",
+            path.display()
+        );
     }
     let source =
         fs::read_to_string(path).with_context(|| format!("failed to read `{}`", path.display()))?;
     let working = parse_source(path, &source)?;
     let project_root = project_root_for(path)?;
     compile_events(path, &project_root, working)
+}
+
+fn print_scry(compiled: &compiler::CompiledWorking) {
+    let ir = &compiled.ir;
+    println!("working: {}", ir.working);
+    println!("language: {}", ir.language);
+    println!("tempo: {} bpm", ir.tempo_bpm);
+    println!("meter: {}/{}", ir.meter[0], ir.meter[1]);
+    println!("duration: {} beats", ir.duration_beats);
+    println!("daemons: {}", ir.daemons.len());
+    println!("spells: {}", ir.spells.len());
+    println!("rites: {}", ir.rites.len());
+    println!("events: {}", ir.events.len());
+    for rite in &ir.rites {
+        println!(
+            "\nrite {}: start {} beats, duration {} beats",
+            rite.id, rite.start_beats, rite.duration_beats
+        );
+        for event in ir.events.iter().filter(|event| {
+            event.time_beats >= rite.start_beats
+                && event.time_beats < rite.start_beats + rite.duration_beats
+        }) {
+            if let Some(pitch) = &event.pitch {
+                println!(
+                    "  {:>7.3} {:<7} {:<12} pitch {} ({})",
+                    event.time_beats, event.kind, event.daemon, pitch.name, pitch.midi
+                );
+            } else {
+                println!(
+                    "  {:>7.3} {:<7} {}",
+                    event.time_beats, event.kind, event.daemon
+                );
+            }
+        }
+    }
 }

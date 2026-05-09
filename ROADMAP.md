@@ -12,7 +12,7 @@ The goal is to keep Malison moving as a compiler and a musical instrument at the
 
 ## Phase 0: Stabilize The MVP
 
-Status: mostly complete.
+Status: complete.
 
 Purpose: make the current `.rite -> IR -> WAV` path boringly reliable before adding more language.
 
@@ -29,10 +29,10 @@ Purpose: make the current `.rite -> IR -> WAV` path boringly reliable before add
 
 * Add CLI integration tests for `check`, `events`, `render --backend rust`, and `render --backend supercollider --dry-run`. Done.
 * Add JSON snapshot tests for `events`. Done.
-* Add SuperCollider script snapshot tests.
-* Add `cargo run -- scry` placeholder or remove `scry` from the advertised initial CLI until implemented.
-* Make error messages include file paths consistently, not only line/column spans.
-* Add a `--version` smoke test and basic release metadata.
+* Add SuperCollider script snapshot tests. Done.
+* Add `cargo run -- scry` placeholder or remove `scry` from the advertised initial CLI until implemented. Done.
+* Make error messages include file paths consistently, not only line/column spans. Done for Phase 0 CLI path validation; richer diagnostics continue in Phase 1.
+* Add a `--version` smoke test and basic release metadata. Done.
 
 ### Exit Criteria
 

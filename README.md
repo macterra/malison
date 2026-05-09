@@ -12,6 +12,7 @@ Implemented commands:
 cargo run -- check path/to/main.rite
 cargo run -- ir path/to/main.rite
 cargo run -- events path/to/main.rite
+cargo run -- scry path/to/main.rite
 cargo run -- render path/to/main.rite
 ```
 
