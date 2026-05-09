@@ -141,7 +141,7 @@ pub fn supercollider_script(
             let sample_path = daemon.sample.as_deref().ok_or_else(|| {
                 anyhow::anyhow!("sample daemon `{}` has no sample path", daemon.id)
             })?;
-            let path = compiled.project_root.join(sample_path);
+            let path = resolve_sample_path(compiled, sample_path);
             let bufnum = sample_buffers[daemon.id.as_str()];
             score_lines.push(format!(
                 "[0.0, [\\b_allocRead, {}, {}]]",
@@ -170,7 +170,7 @@ pub fn supercollider_script(
                 let sample_path = daemon.sample.as_deref().ok_or_else(|| {
                     anyhow::anyhow!("sample daemon `{}` has no sample path", daemon.id)
                 })?;
-                let sample_info = wav_info(&compiled.project_root.join(sample_path))?;
+                let sample_info = wav_info(&resolve_sample_path(compiled, sample_path))?;
                 let start_seconds = param_f64(&event.params, "start_seconds").unwrap_or(0.0);
                 let end_seconds = param_f64(&event.params, "end_seconds")
                     .unwrap_or(sample_info.frames as f64 / sample_info.sample_rate as f64);
@@ -310,7 +310,7 @@ fn render_sample(
         .sample
         .as_deref()
         .ok_or_else(|| anyhow::anyhow!("sample daemon `{}` has no sample path", daemon.id))?;
-    let path = compiled.project_root.join(sample_path);
+    let path = resolve_sample_path(compiled, sample_path);
     let sample = read_wav(&path, sample_rate)?;
     let sample = slice_sample(&sample, event, sample_rate);
     let start = seconds_to_frame(
@@ -550,6 +550,15 @@ fn read_wav(path: &Path, expected_sample_rate: u32) -> Result<Vec<[f32; 2]>> {
     Ok(frames)
 }
 
+fn resolve_sample_path(compiled: &CompiledWorking, sample_path: &str) -> std::path::PathBuf {
+    let direct = compiled.project_root.join(sample_path);
+    if direct.exists() {
+        direct
+    } else {
+        compiled.sample_root.join(sample_path)
+    }
+}
+
 struct WavInfo {
     sample_rate: u32,
     frames: u32,
@@ -755,7 +764,7 @@ working "Render Test" {
         fs::write(&path, source).unwrap();
         let working = parse_source(&path, source).unwrap();
         let project_root = project_root_for(&path).unwrap();
-        let compiled = compile_events(&path, &project_root, working).unwrap();
+        let compiled = compile_events(&path, &project_root, &crate::compiler::ProjectConfig::default(), working).unwrap();
         let out = root.join("renders/render-test.wav");
 
         render_wav(&compiled, &out, 48_000, 24).unwrap();
@@ -801,7 +810,7 @@ working "SC Test" {
         fs::write(&path, source).unwrap();
         let working = parse_source(&path, source).unwrap();
         let project_root = project_root_for(&path).unwrap();
-        let compiled = compile_events(&path, &project_root, working).unwrap();
+        let compiled = compile_events(&path, &project_root, &crate::compiler::ProjectConfig::default(), working).unwrap();
         let script =
             supercollider_script(&compiled, &root.join("renders/sc-test.wav"), 48_000, 24).unwrap();
 
@@ -849,7 +858,7 @@ working "Stereo Sample Test" {
         fs::write(&path, source).unwrap();
         let working = parse_source(&path, source).unwrap();
         let project_root = project_root_for(&path).unwrap();
-        let compiled = compile_events(&path, &project_root, working).unwrap();
+        let compiled = compile_events(&path, &project_root, &crate::compiler::ProjectConfig::default(), working).unwrap();
         let out = root.join("renders/test.wav");
         render_wav(&compiled, &out, 48_000, 24).unwrap();
 
@@ -904,7 +913,7 @@ working "Archetype Test" {
         fs::write(&path, source).unwrap();
         let working = parse_source(&path, source).unwrap();
         let project_root = project_root_for(&path).unwrap();
-        let compiled = compile_events(&path, &project_root, working).unwrap();
+        let compiled = compile_events(&path, &project_root, &crate::compiler::ProjectConfig::default(), working).unwrap();
         let out = root.join("renders/test.wav");
         render_wav(&compiled, &out, 48_000, 24).unwrap();
 

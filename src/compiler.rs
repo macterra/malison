@@ -17,6 +17,29 @@ pub struct CompiledWorking {
     pub ir: Ir,
     pub evoke_wav: PathBuf,
     pub project_root: PathBuf,
+    pub sample_root: PathBuf,
+    pub render_root: PathBuf,
+    pub build_root: PathBuf,
+    pub render_backend: String,
+    pub sample_rate: u32,
+    pub bit_depth: u16,
+}
+
+#[derive(Clone, Debug)]
+pub struct ProjectConfig {
+    pub sample_dir: PathBuf,
+    pub render_dir: PathBuf,
+    pub build_dir: PathBuf,
+}
+
+impl Default for ProjectConfig {
+    fn default() -> Self {
+        Self {
+            sample_dir: PathBuf::from("samples"),
+            render_dir: PathBuf::from("renders"),
+            build_dir: PathBuf::from("build"),
+        }
+    }
 }
 
 pub fn project_root_for(input: &Path) -> Result<PathBuf> {
@@ -39,6 +62,7 @@ pub fn project_root_for(input: &Path) -> Result<PathBuf> {
 pub fn compile_events(
     input: &Path,
     project_root: &Path,
+    config: &ProjectConfig,
     working: Working,
 ) -> Result<CompiledWorking> {
     validate_working_header(&working)?;
@@ -73,7 +97,7 @@ pub fn compile_events(
             let sample = daemon.sample_path.as_deref().ok_or_else(|| {
                 anyhow::anyhow!("sample daemon `{}` is missing a path", daemon.name)
             })?;
-            validate_sample_path(project_root, sample)?;
+            validate_sample_path(project_root, config, sample)?;
         }
         validate_params(&daemon.name, daemon.kind.clone(), &daemon.params)?;
     }
@@ -304,6 +328,12 @@ pub fn compile_events(
     Ok(CompiledWorking {
         evoke_wav: PathBuf::from(evoke_wav),
         project_root: project_root.to_path_buf(),
+        sample_root: project_root.join(&config.sample_dir),
+        render_root: project_root.join(&config.render_dir),
+        build_root: project_root.join(&config.build_dir),
+        render_backend: "rust".to_string(),
+        sample_rate: 48_000,
+        bit_depth: 24,
         ir,
     })
 }
@@ -938,13 +968,17 @@ fn edit_distance(left: &str, right: &str) -> usize {
     previous[right.chars().count()]
 }
 
-fn validate_sample_path(project_root: &Path, sample: &str) -> Result<()> {
+fn validate_sample_path(project_root: &Path, config: &ProjectConfig, sample: &str) -> Result<()> {
     if sample.starts_with('~') || sample.contains('*') || sample.contains("://") {
         bail!("sample path `{sample}` is not valid in language 0.1");
     }
-    let path = project_root.join(sample);
-    if !path.exists() {
-        bail!("sample file `{}` does not exist", path.display());
+    let direct_path = project_root.join(sample);
+    let manifest_path = project_root.join(&config.sample_dir).join(sample);
+    if !direct_path.exists() && !manifest_path.exists() {
+        bail!(
+            "sample file `{}` does not exist",
+            manifest_path.display()
+        );
     }
     Ok(())
 }
@@ -1171,7 +1205,7 @@ working "Test" {
         let working = parse_source(&path, source).unwrap();
         assert_eq!(working.spells[0].kind, PatternKind::Rhythm);
 
-        let compiled = compile_events(&path, &root, working).unwrap();
+        let compiled = compile_events(&path, &root, &ProjectConfig::default(), working).unwrap();
         let triggers = compiled
             .ir
             .events
@@ -1219,7 +1253,7 @@ working "Velocity Test" {
         let path = root.join("main.rite");
         fs::write(&path, source).unwrap();
         let working = parse_source(&path, source).unwrap();
-        let compiled = compile_events(&path, &root, working).unwrap();
+        let compiled = compile_events(&path, &root, &ProjectConfig::default(), working).unwrap();
         let velocities = compiled
             .ir
             .events
@@ -1261,7 +1295,7 @@ working "Euclid Test" {
         let path = root.join("main.rite");
         fs::write(&path, source).unwrap();
         let working = parse_source(&path, source).unwrap();
-        let compiled = compile_events(&path, &root, working).unwrap();
+        let compiled = compile_events(&path, &root, &ProjectConfig::default(), working).unwrap();
         let times = compiled
             .ir
             .events
@@ -1302,7 +1336,7 @@ working "Euclid Rotate Test" {
         let path = root.join("main.rite");
         fs::write(&path, source).unwrap();
         let working = parse_source(&path, source).unwrap();
-        let compiled = compile_events(&path, &root, working).unwrap();
+        let compiled = compile_events(&path, &root, &ProjectConfig::default(), working).unwrap();
         let times = compiled
             .ir
             .events
@@ -1359,7 +1393,7 @@ working "Transform Test" {
         let path = root.join("main.rite");
         fs::write(&path, source).unwrap();
         let working = parse_source(&path, source).unwrap();
-        let compiled = compile_events(&path, &root, working).unwrap();
+        let compiled = compile_events(&path, &root, &ProjectConfig::default(), working).unwrap();
         let times = compiled
             .ir
             .events
@@ -1400,7 +1434,7 @@ working "Every Test" {
         let path = root.join("main.rite");
         fs::write(&path, source).unwrap();
         let working = parse_source(&path, source).unwrap();
-        let compiled = compile_events(&path, &root, working).unwrap();
+        let compiled = compile_events(&path, &root, &ProjectConfig::default(), working).unwrap();
         let times = compiled
             .ir
             .events
@@ -1441,7 +1475,7 @@ working "Stochastic Test" {
         let path = root.join("main.rite");
         fs::write(&path, source).unwrap();
         let working = parse_source(&path, source).unwrap();
-        let compiled = compile_events(&path, &root, working).unwrap();
+        let compiled = compile_events(&path, &root, &ProjectConfig::default(), working).unwrap();
         let first_pass = compiled
             .ir
             .events
@@ -1454,7 +1488,7 @@ working "Stochastic Test" {
             .all(|(time, velocity)| (0.0..=4.0).contains(time) && (0.5..=0.75).contains(velocity)));
 
         let working = parse_source(&path, source).unwrap();
-        let compiled_again = compile_events(&path, &root, working).unwrap();
+        let compiled_again = compile_events(&path, &root, &ProjectConfig::default(), working).unwrap();
         let second_pass = compiled_again
             .ir
             .events
@@ -1503,7 +1537,7 @@ working "Arrangement Test" {
         let path = root.join("main.rite");
         fs::write(&path, source).unwrap();
         let working = parse_source(&path, source).unwrap();
-        let compiled = compile_events(&path, &root, working).unwrap();
+        let compiled = compile_events(&path, &root, &ProjectConfig::default(), working).unwrap();
         let starts = compiled
             .ir
             .rites
@@ -1516,7 +1550,7 @@ working "Arrangement Test" {
         let overlapping = source.replace("rite drop at bar 3", "rite drop at bar 1");
         fs::write(&path, &overlapping).unwrap();
         let working = parse_source(&path, &overlapping).unwrap();
-        let error = compile_events(&path, &root, working).unwrap_err().to_string();
+        let error = compile_events(&path, &root, &ProjectConfig::default(), working).unwrap_err().to_string();
         assert!(error.contains("overlaps rite `intro`"));
 
         fs::remove_dir_all(&root).unwrap();
@@ -1549,7 +1583,7 @@ working "Drone Test" {
         let path = root.join("main.rite");
         fs::write(&path, source).unwrap();
         let working = parse_source(&path, source).unwrap();
-        let compiled = compile_events(&path, &root, working).unwrap();
+        let compiled = compile_events(&path, &root, &ProjectConfig::default(), working).unwrap();
         assert_eq!(compiled.ir.events[0].kind, "continuous");
         assert_eq!(compiled.ir.events[0].duration_beats, 8.0);
         assert_eq!(compiled.ir.events[0].pitch.as_ref().unwrap().name, "F1");
@@ -1587,7 +1621,7 @@ working "Automation Test" {
         let path = root.join("main.rite");
         fs::write(&path, source).unwrap();
         let working = parse_source(&path, source).unwrap();
-        let compiled = compile_events(&path, &root, working).unwrap();
+        let compiled = compile_events(&path, &root, &ProjectConfig::default(), working).unwrap();
         assert_eq!(compiled.ir.control_events.len(), 1);
         assert_eq!(compiled.ir.control_events[0].target, "tension");
         assert_eq!(compiled.ir.control_events[0].duration_beats, 8.0);
@@ -1626,7 +1660,7 @@ working "Circle Test" {
         let path = root.join("main.rite");
         fs::write(&path, source).unwrap();
         let working = parse_source(&path, source).unwrap();
-        let compiled = compile_events(&path, &root, working).unwrap();
+        let compiled = compile_events(&path, &root, &ProjectConfig::default(), working).unwrap();
         assert_eq!(compiled.ir.circles.len(), 2);
         assert_eq!(compiled.ir.circles[1].parent.as_deref(), Some("master"));
         assert_eq!(compiled.ir.circles[1].wards[0].kind, "limiter");
@@ -1634,7 +1668,7 @@ working "Circle Test" {
         let bad = source.replace("out drums", "out nowhere");
         fs::write(&path, &bad).unwrap();
         let working = parse_source(&path, &bad).unwrap();
-        let error = compile_events(&path, &root, working).unwrap_err().to_string();
+        let error = compile_events(&path, &root, &ProjectConfig::default(), working).unwrap_err().to_string();
         assert!(error.contains("unresolved circle `nowhere`"));
 
         fs::remove_dir_all(&root).unwrap();

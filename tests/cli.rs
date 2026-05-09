@@ -162,6 +162,67 @@ fn render_rust_backend_writes_wav() {
 }
 
 #[test]
+fn manifest_controls_render_defaults_and_paths() {
+    let root = tempfile::tempdir().unwrap();
+    fs::create_dir_all(root.path().join("assets")).unwrap();
+    fs::create_dir_all(root.path().join("outs")).unwrap();
+    fs::write(
+        root.path().join("malison.toml"),
+        r#"
+[project]
+name = "manifest-test"
+
+[render]
+backend = "rust"
+sample_rate = 48000
+bit_depth = 16
+
+[paths]
+samples = "assets"
+renders = "outs"
+build = "scratch"
+"#,
+    )
+    .unwrap();
+    write_test_kick(&root.path().join("assets/kick.wav"));
+    fs::write(
+        root.path().join("main.rite"),
+        r#"
+language 0.1
+
+working "Manifest Test" {
+  tempo 120
+  meter 4/4
+  seed "manifest"
+
+  daemon kick = sample "kick.wav"
+  spell hits = pattern "x---"
+
+  rite main bars 1 {
+    invoke kick with hits every 1/16
+  }
+
+  evoke wav "manifest.wav"
+}
+"#,
+    )
+    .unwrap();
+
+    Command::cargo_bin("malison")
+        .unwrap()
+        .arg("render")
+        .arg(root.path().join("main.rite"))
+        .arg("--force")
+        .assert()
+        .success();
+
+    let out = root.path().join("outs/manifest.wav");
+    assert!(out.exists());
+    let reader = hound::WavReader::open(out).unwrap();
+    assert_eq!(reader.spec().bits_per_sample, 16);
+}
+
+#[test]
 fn render_supercollider_dry_run_outputs_score() {
     let fixture = Fixture::new();
 

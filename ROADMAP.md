@@ -335,16 +335,18 @@ Purpose: make Malison usable across more than one file and more than one sample 
 
 ### Manifest
 
-* Parse `malison.toml`.
+* Parse `malison.toml`. Done.
 * Respect render defaults:
   * sample rate
   * bit depth
   * backend
+  Done.
 * Respect path defaults:
   * samples
   * renders
   * build
-* Add manifest validation diagnostics.
+  Done.
+* Add manifest validation diagnostics. Done.
 
 ### Multi-File Source
 
