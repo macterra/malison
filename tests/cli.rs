@@ -348,6 +348,7 @@ fn suggests_nearby_daemon_name() {
         .arg(fixture.main_rite())
         .assert()
         .failure()
+        .stderr(predicate::str::contains("error[E021]"))
         .stderr(predicate::str::contains("unresolved daemon `basss`"))
         .stderr(predicate::str::contains("did you mean `bass`?"));
 }

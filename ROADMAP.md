@@ -56,7 +56,7 @@ Purpose: turn the current hand-rolled parser into a reliable compiler frontend w
 
 ### Diagnostics
 
-* Introduce diagnostic codes such as `E021` unresolved daemon and `E044` routing cycle.
+* Introduce diagnostic codes such as `E021` unresolved daemon and `E044` routing cycle. In progress; unresolved daemon and spell errors emit `E021`.
 * Print source snippets with caret labels. Done for span-based parse and semantic errors.
 * Distinguish parse errors, semantic errors, backend errors, and filesystem errors.
 * Add suggestions for nearby names: `basss` -> `bass`. Done for unresolved daemons and spells.

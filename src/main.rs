@@ -58,9 +58,25 @@ fn main() -> ExitCode {
     match run() {
         Ok(()) => ExitCode::SUCCESS,
         Err(error) => {
-            eprintln!("error: {error:#}");
+            eprintln!("error[{}]: {error:#}", diagnostic_code(&error));
             ExitCode::FAILURE
         }
+    }
+}
+
+fn diagnostic_code(error: &anyhow::Error) -> &'static str {
+    let message = error.to_string();
+    if message.contains("unresolved daemon") || message.contains("unresolved spell") {
+        "E021"
+    } else if message.contains("unsupported")
+        || message.contains("expected")
+        || message.contains("unexpected")
+    {
+        "E001"
+    } else if message.contains("output") || message.contains("failed to read") {
+        "E070"
+    } else {
+        "E000"
     }
 }
 
