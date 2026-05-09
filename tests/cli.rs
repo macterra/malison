@@ -353,7 +353,33 @@ fn capabilities_outputs_backend_json() {
         .success()
         .stdout(predicate::str::contains("\"name\": \"rust\""))
         .stdout(predicate::str::contains("\"name\": \"supercollider\""))
+        .stdout(predicate::str::contains("effect_features"))
         .stdout(predicate::str::contains("metal_hit"));
+}
+
+#[test]
+fn supercollider_rejects_circle_effects_before_render() {
+    let fixture = Fixture::new_with_source(
+        &RITE
+            .replace(
+                "  daemon kick = sample",
+                "  circle drums -> master { effect gain db -3 }\n\n  daemon kick = sample",
+            )
+            .replace("{ gain -3 }", "{ gain -3 out drums }"),
+    );
+
+    Command::cargo_bin("malison")
+        .unwrap()
+        .arg("render")
+        .arg(fixture.main_rite())
+        .arg("--backend")
+        .arg("supercollider")
+        .arg("--dry-run")
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains(
+            "does not support circle effects or wards",
+        ));
 }
 
 #[test]

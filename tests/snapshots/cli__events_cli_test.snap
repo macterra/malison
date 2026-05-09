@@ -6,6 +6,7 @@ expression: json
 {
   "circles": [
     {
+      "effects": [],
       "id": "master",
       "source": {
         "column": 3,

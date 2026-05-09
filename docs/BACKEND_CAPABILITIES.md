@@ -39,8 +39,19 @@ Supported pattern features:
 * deterministic transforms
 * seeded stochastic transforms
 
+Rust backend effect features:
+
+* `gain`
+* `pan`
+* `highpass`
+* `lowpass`
+* `saturator`
+* `delay`
+* `reverb`
+* `limiter`
+
 Known unsupported backend features:
 
-* audio bus routing
-* effect processors
+* audio bus routing in the SuperCollider backend
+* effect processors in the SuperCollider backend
 * parameter bindings

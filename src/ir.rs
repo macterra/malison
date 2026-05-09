@@ -36,7 +36,15 @@ pub struct IrCircle {
     pub id: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub parent: Option<String>,
+    pub effects: Vec<IrEffect>,
     pub wards: Vec<IrWard>,
+    pub source: IrSource,
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub struct IrEffect {
+    pub kind: String,
+    pub params: BTreeMap<String, serde_json::Value>,
     pub source: IrSource,
 }
 
@@ -187,6 +195,19 @@ impl Ir {
                     from: id,
                     to: format!("circle:{parent}"),
                     kind: "routes_to".to_string(),
+                });
+            }
+            for (index, effect) in circle.effects.iter().enumerate() {
+                let effect_id = format!("effect:{}:{index}", circle.id);
+                nodes.push(IrGraphNode {
+                    id: effect_id.clone(),
+                    kind: "effect".to_string(),
+                    label: effect.kind.clone(),
+                });
+                edges.push(IrGraphEdge {
+                    from: format!("circle:{}", circle.id),
+                    to: effect_id,
+                    kind: "processes".to_string(),
                 });
             }
         }

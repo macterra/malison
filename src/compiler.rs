@@ -5,8 +5,8 @@ use std::path::{Path, PathBuf};
 use anyhow::{Context, Result, bail};
 
 use crate::ir::{
-    Ir, IrCircle, IrControlEvent, IrDaemon, IrEvent, IrPitch, IrRandomStream, IrRenderTarget,
-    IrRite, IrSource, IrSpell, IrWard,
+    Ir, IrCircle, IrControlEvent, IrDaemon, IrEffect, IrEvent, IrPitch, IrRandomStream,
+    IrRenderTarget, IrRite, IrSource, IrSpell, IrWard,
 };
 use crate::parser::{
     AutomationCurve, AutomationDirection, DaemonKind, PatternKind, PatternTransform, RitePlacement,
@@ -478,6 +478,9 @@ fn validate_circles(working: &Working) -> Result<()> {
         );
     }
     for circle in &working.circles {
+        for effect in &circle.effects {
+            validate_effect(effect)?;
+        }
         for ward in &circle.wards {
             validate_ward(ward)?;
         }
@@ -516,6 +519,7 @@ fn ir_circles(input: &Path, working: &Working) -> Vec<IrCircle> {
     let mut circles = vec![IrCircle {
         id: "master".to_string(),
         parent: None,
+        effects: Vec::new(),
         wards: Vec::new(),
         source: source_for_span(input, working.evoke_span),
     }];
@@ -523,6 +527,15 @@ fn ir_circles(input: &Path, working: &Working) -> Vec<IrCircle> {
         IrCircle {
             id: circle.name.clone(),
             parent: circle.parent.clone().or_else(|| Some("master".to_string())),
+            effects: circle
+                .effects
+                .iter()
+                .map(|effect| IrEffect {
+                    kind: effect.kind.clone(),
+                    params: merged_params(&effect.params, &[]),
+                    source: source_for_span(input, effect.span),
+                })
+                .collect(),
             wards: circle
                 .wards
                 .iter()
@@ -552,6 +565,84 @@ fn validate_ward(ward: &crate::parser::Ward) -> Result<()> {
             ward.param
         ),
     }
+}
+
+fn validate_effect(effect: &crate::parser::Effect) -> Result<()> {
+    match effect.kind.as_str() {
+        "gain" => validate_effect_params(effect, &["db", "gain"])?,
+        "pan" => validate_effect_params(effect, &["amount", "pan"])?,
+        "highpass" | "lowpass" => validate_effect_params(effect, &["cutoff"])?,
+        "saturator" => validate_effect_params(effect, &["drive", "amount"])?,
+        "delay" => validate_effect_params(effect, &["time", "feedback", "wet"])?,
+        "reverb" => validate_effect_params(effect, &["decay", "wet"])?,
+        "limiter" => validate_effect_params(effect, &["ceiling"])?,
+        other => bail!("{}: unsupported effect `{other}`", effect.span),
+    }
+    for param in &effect.params {
+        validate_effect_param_value(effect, param)?;
+    }
+    Ok(())
+}
+
+fn validate_effect_params(effect: &crate::parser::Effect, allowed: &[&str]) -> Result<()> {
+    for param in &effect.params {
+        if !allowed.contains(&param.name.as_str()) {
+            bail!(
+                "{}: effect `{}` does not support parameter `{}`",
+                effect.span,
+                effect.kind,
+                param.name
+            );
+        }
+    }
+    Ok(())
+}
+
+fn validate_effect_param_value(
+    effect: &crate::parser::Effect,
+    param: &crate::parser::Param,
+) -> Result<()> {
+    let number = match &param.value {
+        Value::Number(number) => *number,
+        _ => bail!(
+            "{}: effect `{}` parameter `{}` must be numeric",
+            effect.span,
+            effect.kind,
+            param.name
+        ),
+    };
+    match param.name.as_str() {
+        "pan" | "amount" if effect.kind == "pan" && !(-1.0..=1.0).contains(&number) => {
+            bail!("{}: pan effect amount must be in [-1, 1]", effect.span);
+        }
+        "drive" | "amount" if effect.kind == "saturator" && !(0.0..=1.0).contains(&number) => {
+            bail!("{}: saturator amount must be in [0, 1]", effect.span);
+        }
+        "wet" | "feedback" if !(0.0..=1.0).contains(&number) => {
+            bail!(
+                "{}: effect `{}` parameter `{}` must be in [0, 1]",
+                effect.span,
+                effect.kind,
+                param.name
+            );
+        }
+        "cutoff" | "time" | "decay" if number <= 0.0 => {
+            bail!(
+                "{}: effect `{}` parameter `{}` must be positive",
+                effect.span,
+                effect.kind,
+                param.name
+            );
+        }
+        "db" | "gain" if effect.kind == "gain" && number > 12.0 => {
+            bail!("{}: gain effect must not exceed +12 dB", effect.span);
+        }
+        "ceiling" if effect.kind == "limiter" && number > 0.0 => {
+            bail!("{}: limiter ceiling must be <= 0 dB", effect.span);
+        }
+        _ => {}
+    }
+    Ok(())
 }
 
 fn ranges_overlap(left_start: f64, left_end: f64, right_start: f64, right_end: f64) -> bool {

@@ -55,6 +55,19 @@ Circles describe routing nodes. `master` is implicit and emitted in IR.
 {
   "id": "drums",
   "parent": "master",
+  "effects": [
+    {
+      "kind": "saturator",
+      "params": {
+        "amount": 0.2
+      },
+      "source": {
+        "file": "examples/second-working/main.rite",
+        "line": 10,
+        "column": 5
+      }
+    }
+  ],
   "wards": [
     {
       "kind": "limiter",

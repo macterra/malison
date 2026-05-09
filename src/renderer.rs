@@ -9,7 +9,7 @@ use anyhow::{Context, Result, bail};
 use serde::Serialize;
 
 use crate::compiler::CompiledWorking;
-use crate::ir::{IrDaemon, IrEvent};
+use crate::ir::{IrCircle, IrDaemon, IrEffect, IrEvent, IrWard};
 
 const RENDER_TAIL_SECONDS: f64 = 2.0;
 
@@ -24,6 +24,7 @@ pub struct BackendCapability {
     pub daemon_kinds: Vec<&'static str>,
     pub sample_features: Vec<&'static str>,
     pub pattern_features: Vec<&'static str>,
+    pub effect_features: Vec<&'static str>,
     pub unsupported: Vec<&'static str>,
 }
 
@@ -53,6 +54,16 @@ pub fn backend_capabilities() -> BackendCapabilities {
         "deterministic_transforms",
         "seeded_stochastic_transforms",
     ];
+    let effect_features = vec![
+        "gain",
+        "pan",
+        "highpass",
+        "lowpass",
+        "saturator",
+        "delay",
+        "reverb",
+        "limiter",
+    ];
     BackendCapabilities {
         backends: vec![
             BackendCapability {
@@ -60,17 +71,15 @@ pub fn backend_capabilities() -> BackendCapabilities {
                 daemon_kinds: daemon_kinds.clone(),
                 sample_features: sample_features.clone(),
                 pattern_features: pattern_features.clone(),
-                unsupported: vec![
-                    "audio_bus_routing",
-                    "effect_processors",
-                    "parameter_bindings",
-                ],
+                effect_features: effect_features.clone(),
+                unsupported: vec!["parameter_bindings"],
             },
             BackendCapability {
                 name: "supercollider",
                 daemon_kinds,
                 sample_features,
                 pattern_features,
+                effect_features: Vec::new(),
                 unsupported: vec![
                     "audio_bus_routing",
                     "effect_processors",
@@ -94,7 +103,15 @@ pub fn render_wav(
     let duration_seconds =
         beats_to_seconds(compiled.ir.duration_beats, compiled.ir.tempo_bpm) + RENDER_TAIL_SECONDS;
     let frame_count = (duration_seconds * sample_rate as f64).ceil() as usize;
-    let mut buffer = vec![[0.0_f32; 2]; frame_count];
+    let mut buffers = compiled
+        .ir
+        .circles
+        .iter()
+        .map(|circle| (circle.id.clone(), vec![[0.0_f32; 2]; frame_count]))
+        .collect::<BTreeMap<_, _>>();
+    buffers
+        .entry("master".to_string())
+        .or_insert_with(|| vec![[0.0_f32; 2]; frame_count]);
 
     let daemons = compiled
         .ir
@@ -110,22 +127,25 @@ pub fn render_wav(
         let daemon = daemons
             .get(event.daemon.as_str())
             .ok_or_else(|| anyhow::anyhow!("event references unknown daemon `{}`", event.daemon))?;
+        let out = event_output_circle(daemon);
+        let buffer = buffers
+            .get_mut(out)
+            .ok_or_else(|| anyhow::anyhow!("event routes to unknown circle `{out}`"))?;
         match daemon.kind.as_str() {
-            "sample" | "samplekit" => {
-                render_sample(compiled, daemon, event, sample_rate, &mut buffer)?
-            }
-            "saw_sub" => render_saw_sub(event, &compiled.ir.tempo_bpm, sample_rate, &mut buffer),
-            "drone" => render_drone(event, &compiled.ir.tempo_bpm, sample_rate, &mut buffer),
-            "noise_burst" => {
-                render_noise_burst(event, &compiled.ir.tempo_bpm, sample_rate, &mut buffer)
-            }
-            "swarm" => render_swarm(event, &compiled.ir.tempo_bpm, sample_rate, &mut buffer),
-            "metal_hit" => {
-                render_metal_hit(event, &compiled.ir.tempo_bpm, sample_rate, &mut buffer)
-            }
+            "sample" | "samplekit" => render_sample(compiled, daemon, event, sample_rate, buffer)?,
+            "saw_sub" => render_saw_sub(event, &compiled.ir.tempo_bpm, sample_rate, buffer),
+            "drone" => render_drone(event, &compiled.ir.tempo_bpm, sample_rate, buffer),
+            "noise_burst" => render_noise_burst(event, &compiled.ir.tempo_bpm, sample_rate, buffer),
+            "swarm" => render_swarm(event, &compiled.ir.tempo_bpm, sample_rate, buffer),
+            "metal_hit" => render_metal_hit(event, &compiled.ir.tempo_bpm, sample_rate, buffer),
             other => bail!("unsupported daemon kind `{other}`"),
         }
     }
+
+    mix_routed_circles(compiled, &mut buffers, sample_rate)?;
+    let buffer = buffers
+        .remove("master")
+        .ok_or_else(|| anyhow::anyhow!("missing master output circle"))?;
 
     if let Some(parent) = out_path
         .parent()
@@ -466,6 +486,138 @@ fn render_sample(
         (db_to_amp(param_f64(&event.params, "gain_db").unwrap_or(0.0)) * event.velocity) as f32;
     let pan = param_f64(&event.params, "pan").unwrap_or(0.0) as f32;
     mix_frames(buffer, start, &sample, gain, pan);
+    Ok(())
+}
+
+fn event_output_circle(daemon: &IrDaemon) -> &str {
+    daemon
+        .params
+        .get("out")
+        .and_then(|value| value.as_str())
+        .unwrap_or("master")
+}
+
+fn mix_routed_circles(
+    compiled: &CompiledWorking,
+    buffers: &mut BTreeMap<String, Vec<[f32; 2]>>,
+    sample_rate: u32,
+) -> Result<()> {
+    let circles = compiled
+        .ir
+        .circles
+        .iter()
+        .map(|circle| (circle.id.as_str(), circle))
+        .collect::<BTreeMap<_, _>>();
+    let mut ordered = compiled
+        .ir
+        .circles
+        .iter()
+        .filter(|circle| circle.id != "master")
+        .collect::<Vec<_>>();
+    ordered.sort_by_key(|circle| std::cmp::Reverse(circle_depth(circle, &circles)));
+
+    for circle in ordered {
+        let mut child = buffers
+            .remove(&circle.id)
+            .ok_or_else(|| anyhow::anyhow!("missing buffer for circle `{}`", circle.id))?;
+        process_circle(circle, &mut child, sample_rate)?;
+        let parent = circle.parent.as_deref().unwrap_or("master");
+        let parent_buffer = buffers.get_mut(parent).ok_or_else(|| {
+            anyhow::anyhow!("circle `{}` routes to unknown `{parent}`", circle.id)
+        })?;
+        mix_frames(parent_buffer, 0, &child, 1.0, 0.0);
+        buffers.insert(circle.id.clone(), child);
+    }
+
+    if let Some(master) = circles.get("master")
+        && let Some(master_buffer) = buffers.get_mut("master")
+    {
+        process_circle(master, master_buffer, sample_rate)?;
+    }
+    Ok(())
+}
+
+fn circle_depth(circle: &IrCircle, circles: &BTreeMap<&str, &IrCircle>) -> usize {
+    let mut depth = 0;
+    let mut cursor = circle;
+    while let Some(parent) = cursor
+        .parent
+        .as_deref()
+        .and_then(|parent| circles.get(parent))
+    {
+        depth += 1;
+        cursor = parent;
+    }
+    depth
+}
+
+fn process_circle(circle: &IrCircle, buffer: &mut [[f32; 2]], sample_rate: u32) -> Result<()> {
+    for effect in &circle.effects {
+        apply_effect(effect, buffer, sample_rate)?;
+    }
+    for ward in &circle.wards {
+        apply_ward(ward, buffer)?;
+    }
+    Ok(())
+}
+
+fn apply_effect(effect: &IrEffect, buffer: &mut [[f32; 2]], sample_rate: u32) -> Result<()> {
+    match effect.kind.as_str() {
+        "gain" => apply_gain(
+            buffer,
+            effect_param(effect, "db")
+                .or_else(|| effect_param(effect, "gain_db"))
+                .unwrap_or(0.0),
+        ),
+        "pan" => apply_pan(
+            buffer,
+            effect_param(effect, "amount")
+                .or_else(|| effect_param(effect, "pan"))
+                .unwrap_or(0.0) as f32,
+        ),
+        "highpass" => apply_highpass(
+            buffer,
+            effect_param(effect, "cutoff_hz").unwrap_or(80.0) as f32,
+            sample_rate,
+        ),
+        "lowpass" => apply_lowpass(
+            buffer,
+            effect_param(effect, "cutoff_hz").unwrap_or(12_000.0) as f32,
+            sample_rate,
+        ),
+        "saturator" => apply_saturator(
+            buffer,
+            effect_param(effect, "drive")
+                .or_else(|| effect_param(effect, "amount"))
+                .unwrap_or(0.25) as f32,
+        ),
+        "delay" => apply_delay(
+            buffer,
+            effect_param(effect, "time").unwrap_or(0.25),
+            effect_param(effect, "feedback").unwrap_or(0.25) as f32,
+            effect_param(effect, "wet").unwrap_or(0.25) as f32,
+            sample_rate,
+        ),
+        "reverb" => apply_reverb(
+            buffer,
+            effect_param(effect, "decay_seconds").unwrap_or(1.2),
+            effect_param(effect, "wet").unwrap_or(0.2) as f32,
+            sample_rate,
+        ),
+        "limiter" => apply_limiter(
+            buffer,
+            effect_param(effect, "ceiling").unwrap_or(-1.0) as f32,
+        ),
+        other => bail!("unsupported effect `{other}`"),
+    }
+    Ok(())
+}
+
+fn apply_ward(ward: &IrWard, buffer: &mut [[f32; 2]]) -> Result<()> {
+    match (ward.kind.as_str(), ward.param.as_str()) {
+        ("limiter", "ceiling") => apply_limiter(buffer, ward.value as f32),
+        _ => bail!("unsupported ward `{} {}`", ward.kind, ward.param),
+    }
     Ok(())
 }
 
@@ -853,6 +1005,97 @@ fn mix_frames(buffer: &mut [[f32; 2]], start: usize, source: &[[f32; 2]], gain: 
         };
         target[0] += frame[0] * left_gain;
         target[1] += frame[1] * right_gain;
+    }
+}
+
+fn effect_param(effect: &IrEffect, name: &str) -> Option<f64> {
+    effect.params.get(name).and_then(|value| value.as_f64())
+}
+
+fn apply_gain(buffer: &mut [[f32; 2]], gain_db: f64) {
+    let gain = db_to_amp(gain_db) as f32;
+    for frame in buffer {
+        frame[0] *= gain;
+        frame[1] *= gain;
+    }
+}
+
+fn apply_pan(buffer: &mut [[f32; 2]], pan: f32) {
+    let pan = pan.clamp(-1.0, 1.0);
+    let left_gain = ((1.0 - pan) * 0.5).sqrt();
+    let right_gain = ((1.0 + pan) * 0.5).sqrt();
+    for frame in buffer {
+        frame[0] *= left_gain;
+        frame[1] *= right_gain;
+    }
+}
+
+fn apply_lowpass(buffer: &mut [[f32; 2]], cutoff: f32, sample_rate: u32) {
+    let mut left = OnePoleLowpass::new(cutoff, sample_rate as f32);
+    let mut right = OnePoleLowpass::new(cutoff, sample_rate as f32);
+    for frame in buffer {
+        frame[0] = left.process(frame[0]);
+        frame[1] = right.process(frame[1]);
+    }
+}
+
+fn apply_highpass(buffer: &mut [[f32; 2]], cutoff: f32, sample_rate: u32) {
+    let mut left = OnePoleLowpass::new(cutoff, sample_rate as f32);
+    let mut right = OnePoleLowpass::new(cutoff, sample_rate as f32);
+    for frame in buffer {
+        frame[0] -= left.process(frame[0]);
+        frame[1] -= right.process(frame[1]);
+    }
+}
+
+fn apply_saturator(buffer: &mut [[f32; 2]], amount: f32) {
+    let drive = 1.0 + amount.clamp(0.0, 1.0) * 16.0;
+    let norm = drive.tanh();
+    for frame in buffer {
+        frame[0] = (frame[0] * drive).tanh() / norm;
+        frame[1] = (frame[1] * drive).tanh() / norm;
+    }
+}
+
+fn apply_delay(
+    buffer: &mut [[f32; 2]],
+    time_seconds: f64,
+    feedback: f32,
+    wet: f32,
+    sample_rate: u32,
+) {
+    let delay = seconds_to_frame(time_seconds.max(0.001), sample_rate).max(1);
+    let feedback = feedback.clamp(0.0, 1.0);
+    let wet = wet.clamp(0.0, 1.0);
+    for index in delay..buffer.len() {
+        let delayed = buffer[index - delay];
+        buffer[index][0] += delayed[0] * wet;
+        buffer[index][1] += delayed[1] * wet;
+        buffer[index][0] += delayed[0] * feedback * 0.5;
+        buffer[index][1] += delayed[1] * feedback * 0.5;
+    }
+}
+
+fn apply_reverb(buffer: &mut [[f32; 2]], decay_seconds: f64, wet: f32, sample_rate: u32) {
+    let wet = wet.clamp(0.0, 1.0);
+    let taps = [0.029_f64, 0.037, 0.041, 0.053];
+    let decay = decay_seconds.max(0.1) as f32;
+    let dry = buffer.to_vec();
+    for (tap_index, tap) in taps.iter().enumerate() {
+        let delay = seconds_to_frame(*tap, sample_rate).max(1);
+        let gain = wet * (1.0 - tap_index as f32 * 0.15) * (decay / (decay + *tap as f32));
+        for index in delay..buffer.len() {
+            buffer[index][0] += dry[index - delay][0] * gain;
+            buffer[index][1] += dry[index - delay][1] * gain;
+        }
+    }
+}
+
+fn apply_limiter(buffer: &mut [[f32; 2]], ceiling_db: f32) {
+    let ceiling = db_to_amp(ceiling_db as f64) as f32;
+    for frame in buffer {
+        frame[0] = frame[0].clamp(-ceiling, ceiling);
+        frame[1] = frame[1].clamp(-ceiling, ceiling);
     }
 }
 
@@ -1288,6 +1531,66 @@ working "Samplekit Test" {
         let script = supercollider_script(&compiled, &out, 48_000, 24).unwrap();
         assert!(script.contains("kit/a.wav"));
         assert!(script.contains("kit/b.wav"));
+
+        fs::remove_dir_all(&root).unwrap();
+    }
+
+    #[test]
+    fn renders_circle_routing_and_effect_chain() {
+        let root =
+            std::env::temp_dir().join(format!("malison-circle-render-test-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        fs::create_dir_all(root.join("samples")).unwrap();
+        fs::write(
+            root.join("malison.toml"),
+            "[project]\nname = \"circle-render-test\"\n",
+        )
+        .unwrap();
+        write_test_kick(&root.join("samples/kick.wav"));
+
+        let source = r#"
+language 0.1
+
+working "Circle Render Test" {
+  tempo 120
+  meter 4/4
+  seed "seed"
+
+  circle drums -> master {
+    effect gain db -3
+    effect highpass cutoff 40
+    effect lowpass cutoff 12000
+    effect saturator amount 0.2
+    effect delay time 0.05 feedback 0.1 wet 0.1
+    effect reverb decay 0.5 wet 0.05
+    effect limiter ceiling -1
+  }
+
+  daemon kick = sample "samples/kick.wav" { out drums gain -3 }
+  spell hits = pattern "x---"
+
+  rite main bars 1 {
+    invoke kick with hits every 1/16
+  }
+
+  evoke wav "renders/test.wav"
+}
+"#;
+        let path = root.join("main.rite");
+        fs::write(&path, source).unwrap();
+        let working = parse_source(&path, source).unwrap();
+        let project_root = project_root_for(&path).unwrap();
+        let compiled = compile_events(
+            &path,
+            &project_root,
+            &crate::compiler::ProjectConfig::default(),
+            working,
+        )
+        .unwrap();
+        assert_eq!(compiled.ir.circles[1].effects.len(), 7);
+        let out = root.join("renders/test.wav");
+        render_wav(&compiled, &out, 48_000, 24).unwrap();
+        assert!(out.exists());
 
         fs::remove_dir_all(&root).unwrap();
     }

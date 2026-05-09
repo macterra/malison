@@ -22,7 +22,15 @@ pub struct Working {
 pub struct Circle {
     pub name: String,
     pub parent: Option<String>,
+    pub effects: Vec<Effect>,
     pub wards: Vec<Ward>,
+    pub span: Span,
+}
+
+#[derive(Clone, Debug)]
+pub struct Effect {
+    pub kind: String,
+    pub params: Vec<Param>,
     pub span: Span,
 }
 
@@ -314,13 +322,16 @@ impl<'a> Parser<'a> {
             None
         };
         self.expect(TokenKind::LBrace)?;
+        let mut effects = Vec::new();
         let mut wards = Vec::new();
         while !self.check(TokenKind::RBrace) {
             if self.check_ident("ward") {
                 wards.push(self.parse_ward()?);
+            } else if self.check_ident("effect") {
+                effects.push(self.parse_effect()?);
             } else {
                 bail!(
-                    "{}: expected `ward` or `}}` in circle declaration",
+                    "{}: expected `effect`, `ward`, or `}}` in circle declaration",
                     self.location()
                 );
             }
@@ -329,9 +340,24 @@ impl<'a> Parser<'a> {
         Ok(Circle {
             name,
             parent,
+            effects,
             wards,
             span,
         })
+    }
+
+    fn parse_effect(&mut self) -> Result<Effect> {
+        let span = self.location();
+        self.expect_ident("effect")?;
+        let kind = self.expect_ident_any()?;
+        let mut params = Vec::new();
+        while !self.check(TokenKind::RBrace)
+            && !self.check_ident("effect")
+            && !self.check_ident("ward")
+        {
+            params.push(self.parse_param()?);
+        }
+        Ok(Effect { kind, params, span })
     }
 
     fn parse_ward(&mut self) -> Result<Ward> {

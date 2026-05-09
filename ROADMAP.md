@@ -256,7 +256,7 @@ Purpose: introduce the `circle`, `effect`, and `ward` concepts after core event 
 * Implement implicit `master` as an explicit IR node. Done.
 * Validate unresolved circles. Done.
 * Validate routing cycles. Done.
-* Support daemon `out` parameters. Done in IR/validation; audio bus routing remains pending.
+* Support daemon `out` parameters. Done in IR/validation and Rust audio routing; SuperCollider rejects routing before render.
 
 ### Effects
 
@@ -270,6 +270,7 @@ Start with low-risk effects:
 * `delay`
 * `reverb`
 * `limiter`
+Done in parser, IR, validation, and Rust backend. SuperCollider reports a clear unsupported-feature diagnostic before render.
 
 Each effect needs:
 
@@ -278,6 +279,7 @@ Each effect needs:
 * backend capability flag
 * Rust implementation or explicit unsupported diagnostic
 * SC implementation or explicit unsupported diagnostic
+Done for the initial effect set.
 
 ### Wards
 

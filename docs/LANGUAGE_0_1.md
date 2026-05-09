@@ -17,7 +17,7 @@ working "Name" {
 
 Supported declarations:
 
-* `circle name -> parent { ward limiter ceiling -1 }`
+* `circle name -> parent { effect saturator amount 0.2 ward limiter ceiling -1 }`
 * `daemon name = sample "path.wav" { ... }`
 * `daemon name = samplekit "folder" { ... }`
 * `daemon name = saw_sub { ... }`

@@ -207,6 +207,9 @@ fn run() -> Result<()> {
             } else {
                 out_path
             };
+            if backend == "supercollider" {
+                validate_supercollider_feature_support(&compiled)?;
+            }
             if dry_run {
                 if backend == "supercollider" {
                     let script = renderer::supercollider_script(
@@ -257,6 +260,27 @@ fn run() -> Result<()> {
             renderer::render_wav(&compiled, &out_path, sample_rate, bit_depth)
         }
     }
+}
+
+fn validate_supercollider_feature_support(compiled: &compiler::CompiledWorking) -> Result<()> {
+    if compiled
+        .ir
+        .circles
+        .iter()
+        .any(|circle| !circle.effects.is_empty() || !circle.wards.is_empty())
+    {
+        anyhow::bail!("backend `supercollider` does not support circle effects or wards yet");
+    }
+    if compiled.ir.daemons.iter().any(|daemon| {
+        daemon
+            .params
+            .get("out")
+            .and_then(|value| value.as_str())
+            .is_some_and(|out| out != "master")
+    }) {
+        anyhow::bail!("backend `supercollider` does not support audio bus routing yet");
+    }
+    Ok(())
 }
 
 fn supercollider_script_artifact_path(compiled: &compiler::CompiledWorking) -> PathBuf {
