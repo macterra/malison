@@ -199,7 +199,7 @@ Purpose: move beyond one repeating section while keeping the model inspectable.
 
 ### Exit Criteria
 
-* A second example has intro, drop, collapse, and outro rites.
+* A second example has intro, drop, collapse, and outro rites. Done in `examples/second-working`.
 * Overlap errors are precise.
 * Arrangement renders identically in Rust and SC for supported features.
 
