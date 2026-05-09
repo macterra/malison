@@ -424,6 +424,35 @@ fn capabilities_outputs_backend_json() {
 }
 
 #[test]
+fn lsp_info_outputs_symbols_and_completions() {
+    let fixture = Fixture::new();
+
+    Command::cargo_bin("malison")
+        .unwrap()
+        .arg("lsp-info")
+        .arg(fixture.main_rite())
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("\"symbols\""))
+        .stdout(predicate::str::contains("\"kick\""))
+        .stdout(predicate::str::contains("\"completions\""));
+}
+
+#[test]
+fn preview_cache_outputs_stable_build_path() {
+    let fixture = Fixture::new();
+
+    Command::cargo_bin("malison")
+        .unwrap()
+        .arg("preview-cache")
+        .arg(fixture.main_rite())
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("preview-"))
+        .stdout(predicate::str::contains(".wav"));
+}
+
+#[test]
 fn supercollider_rejects_circle_effects_before_render() {
     let fixture = Fixture::new_with_source(
         &RITE

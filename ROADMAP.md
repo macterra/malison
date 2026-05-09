@@ -383,17 +383,17 @@ Purpose: make Malison pleasant to write, inspect, and refactor.
 
 ### Language Server
 
-* Diagnostics while editing.
-* Symbol lookup for daemons, spells, rites, and circles.
-* Go-to definition.
-* Hover docs for built-in params and units.
-* Completion for declarations and supported backend features.
+* Diagnostics while editing. Done through `check` plus `lsp-info` integration data.
+* Symbol lookup for daemons, spells, rites, and circles. Done with `malison lsp-info`.
+* Go-to definition. Done with source locations in `malison lsp-info`.
+* Hover docs for built-in params and units. Done with `malison lsp-info`.
+* Completion for declarations and supported backend features. Done with `malison lsp-info`.
 
 ### Developer Tools
 
 * `malison graph` visual output. Done with DOT output.
-* `malison scry` richer causality reports.
-* Audio preview cache.
+* `malison scry` richer causality reports. Done for controls and bindings.
+* Audio preview cache. Done with deterministic `malison preview-cache`.
 * Semantic diff for IR/event changes. Done with `malison diff`.
 
 ### Exit Criteria

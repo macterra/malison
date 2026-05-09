@@ -45,6 +45,10 @@ enum Command {
     Diff { left: PathBuf, right: PathBuf },
     /// Print backend capability metadata as JSON.
     Capabilities,
+    /// Print editor-oriented diagnostics, symbols, hover docs, and completions as JSON.
+    LspInfo { file: PathBuf },
+    /// Print the deterministic preview-cache path for a source file.
+    PreviewCache { file: PathBuf },
     /// Inspect event expansion in a human-readable form.
     Scry { file: PathBuf },
     /// Format a source file in place.
@@ -150,6 +154,23 @@ fn run() -> Result<()> {
             println!(
                 "{}",
                 serde_json::to_string_pretty(&renderer::backend_capabilities())?
+            );
+            Ok(())
+        }
+        Command::LspInfo { file } => {
+            let compiled = load_and_compile(&file)?;
+            println!("{}", serde_json::to_string_pretty(&lsp_info(&compiled))?);
+            Ok(())
+        }
+        Command::PreviewCache { file } => {
+            let compiled = load_and_compile(&file)?;
+            let key = stable_hash(&serde_json::to_string(&compiled.ir)?);
+            println!(
+                "{}",
+                compiled
+                    .build_root
+                    .join(format!("preview-{key:016x}.wav"))
+                    .display()
             );
             Ok(())
         }
@@ -283,6 +304,29 @@ struct RenderMetadata<'a> {
     control_bindings: usize,
 }
 
+#[derive(Serialize)]
+struct LspInfo {
+    diagnostics: Vec<String>,
+    symbols: Vec<LspSymbol>,
+    hovers: Vec<LspHover>,
+    completions: Vec<String>,
+}
+
+#[derive(Serialize)]
+struct LspSymbol {
+    kind: String,
+    name: String,
+    file: String,
+    line: usize,
+    column: usize,
+}
+
+#[derive(Serialize)]
+struct LspHover {
+    name: &'static str,
+    docs: &'static str,
+}
+
 fn write_render_metadata(
     compiled: &compiler::CompiledWorking,
     out_path: &Path,
@@ -307,6 +351,86 @@ fn write_render_metadata(
     let path = out_path.with_extension("malison.json");
     fs::write(&path, serde_json::to_string_pretty(&metadata)?)
         .with_context(|| format!("failed to write `{}`", path.display()))
+}
+
+fn lsp_info(compiled: &compiler::CompiledWorking) -> LspInfo {
+    let mut symbols = Vec::new();
+    for daemon in &compiled.ir.daemons {
+        symbols.push(LspSymbol {
+            kind: "daemon".to_string(),
+            name: daemon.id.clone(),
+            file: daemon.source.file.clone(),
+            line: daemon.source.line,
+            column: daemon.source.column,
+        });
+    }
+    for spell in &compiled.ir.spells {
+        symbols.push(LspSymbol {
+            kind: "spell".to_string(),
+            name: spell.id.clone(),
+            file: spell.source.file.clone(),
+            line: spell.source.line,
+            column: spell.source.column,
+        });
+    }
+    for rite in &compiled.ir.rites {
+        symbols.push(LspSymbol {
+            kind: "rite".to_string(),
+            name: rite.id.clone(),
+            file: rite.source.file.clone(),
+            line: rite.source.line,
+            column: rite.source.column,
+        });
+    }
+    for circle in &compiled.ir.circles {
+        symbols.push(LspSymbol {
+            kind: "circle".to_string(),
+            name: circle.id.clone(),
+            file: circle.source.file.clone(),
+            line: circle.source.line,
+            column: circle.source.column,
+        });
+    }
+    LspInfo {
+        diagnostics: Vec::new(),
+        symbols,
+        hovers: vec![
+            LspHover {
+                name: "gain",
+                docs: "Gain in decibels.",
+            },
+            LspHover {
+                name: "pan",
+                docs: "Stereo pan from -1 left to 1 right.",
+            },
+            LspHover {
+                name: "cutoff",
+                docs: "Filter cutoff in hertz.",
+            },
+            LspHover {
+                name: "drive",
+                docs: "Saturation drive normalized in [0, 1].",
+            },
+        ],
+        completions: vec![
+            "circle".to_string(),
+            "daemon".to_string(),
+            "spell".to_string(),
+            "rite".to_string(),
+            "invoke".to_string(),
+            "bind".to_string(),
+            "raise".to_string(),
+            "lower".to_string(),
+            "banish".to_string(),
+            "sample".to_string(),
+            "samplekit".to_string(),
+            "saw_sub".to_string(),
+            "drone".to_string(),
+            "noise_burst".to_string(),
+            "swarm".to_string(),
+            "metal_hit".to_string(),
+        ],
+    }
 }
 
 fn validate_supercollider_feature_support(compiled: &compiler::CompiledWorking) -> Result<()> {
@@ -499,6 +623,15 @@ fn parse_include_line(line: &str) -> Option<&str> {
     let trimmed = line.trim();
     let rest = trimmed.strip_prefix("include ")?;
     rest.strip_prefix('"')?.strip_suffix('"')
+}
+
+fn stable_hash(value: &str) -> u64 {
+    let mut hash = 0xcbf29ce484222325_u64;
+    for byte in value.as_bytes() {
+        hash ^= *byte as u64;
+        hash = hash.wrapping_mul(0x100000001b3);
+    }
+    hash
 }
 
 fn with_source_snippet(path: &Path, source: &str, error: anyhow::Error) -> anyhow::Error {
