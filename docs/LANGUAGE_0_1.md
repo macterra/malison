@@ -48,6 +48,8 @@ Common daemon parameters:
 * Samples and sample kits: `gain`, `pan`, `tune`, `start`, `end`, `normalize on|off`
 * `saw_sub`: `gain`, `pan`, `cutoff`, `drive`, `attack`, `decay`, `sustain`, `release`, `detune`, `sub`, `resonance`
 
+Supported hard wards are `ward limiter ceiling`, `ward loudness max`, and `ward gain max`. Limiter wards are also applied as simple output limiters in the Rust backend.
+
 Supported pattern transforms:
 
 * `.rotate(steps)`

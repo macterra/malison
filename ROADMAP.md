@@ -287,8 +287,8 @@ Done for the initial effect set.
   * limiter ceiling declaration validation
   * loudness target declaration validation
   * unsafe gain rejection
-  Limiter ceiling declaration validation is done.
-* Add soft wards as processors only after routing and effects are working.
+  Done.
+* Add soft wards as processors only after routing and effects are working. Done for limiter wards; loudness and gain wards are hard validation constraints in `0.1`.
 
 ### Exit Criteria
 

@@ -558,6 +558,14 @@ fn validate_ward(ward: &crate::parser::Ward) -> Result<()> {
         ("limiter", "ceiling") => {
             bail!("{}: limiter ceiling must be <= 0 dB", ward.span);
         }
+        ("loudness", "max") if ward.value <= 0.0 => Ok(()),
+        ("loudness", "max") => {
+            bail!("{}: loudness max must be <= 0 LUFS", ward.span);
+        }
+        ("gain", "max") if ward.value <= 12.0 => Ok(()),
+        ("gain", "max") => {
+            bail!("{}: gain max ward must be <= 12 dB", ward.span);
+        }
         _ => bail!(
             "{}: unsupported ward `{} {}`",
             ward.span,
@@ -2003,6 +2011,8 @@ working "Circle Test" {
 
   circle drums -> master {
     ward limiter ceiling -1
+    ward loudness max -9
+    ward gain max 6
   }
   daemon kick = sample "samples/kick.wav" { out drums }
   spell hits = pattern "x---"
@@ -2021,6 +2031,7 @@ working "Circle Test" {
         assert_eq!(compiled.ir.circles.len(), 2);
         assert_eq!(compiled.ir.circles[1].parent.as_deref(), Some("master"));
         assert_eq!(compiled.ir.circles[1].wards[0].kind, "limiter");
+        assert_eq!(compiled.ir.circles[1].wards.len(), 3);
 
         let bad = source.replace("out drums", "out nowhere");
         fs::write(&path, &bad).unwrap();
@@ -2029,6 +2040,14 @@ working "Circle Test" {
             .unwrap_err()
             .to_string();
         assert!(error.contains("unresolved circle `nowhere`"));
+
+        let unsafe_gain = source.replace("ward gain max 6", "ward gain max 18");
+        fs::write(&path, &unsafe_gain).unwrap();
+        let working = parse_source(&path, &unsafe_gain).unwrap();
+        let error = compile_events(&path, &root, &ProjectConfig::default(), working)
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains("gain max ward must be <= 12 dB"));
 
         fs::remove_dir_all(&root).unwrap();
     }

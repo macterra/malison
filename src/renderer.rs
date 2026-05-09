@@ -616,6 +616,7 @@ fn apply_effect(effect: &IrEffect, buffer: &mut [[f32; 2]], sample_rate: u32) ->
 fn apply_ward(ward: &IrWard, buffer: &mut [[f32; 2]]) -> Result<()> {
     match (ward.kind.as_str(), ward.param.as_str()) {
         ("limiter", "ceiling") => apply_limiter(buffer, ward.value as f32),
+        ("loudness", "max") | ("gain", "max") => {}
         _ => bail!("unsupported ward `{} {}`", ward.kind, ward.param),
     }
     Ok(())
