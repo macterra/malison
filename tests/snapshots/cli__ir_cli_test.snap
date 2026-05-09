@@ -1,0 +1,195 @@
+---
+source: tests/cli.rs
+assertion_line: 67
+expression: json
+---
+{
+  "daemons": [
+    {
+      "id": "kick",
+      "kind": "sample",
+      "params": {
+        "gain_db": -3.0
+      },
+      "sample": "samples/kick.wav"
+    },
+    {
+      "id": "bass",
+      "kind": "saw_sub",
+      "params": {
+        "cutoff_hz": 300.0,
+        "drive": 0.3
+      }
+    }
+  ],
+  "duration_beats": 4.0,
+  "events": [
+    {
+      "daemon": "kick",
+      "duration_beats": 0.25,
+      "id": "evt_main_0_0",
+      "kind": "trigger",
+      "params": {
+        "gain_db": -3.0
+      },
+      "source": {
+        "column": 5,
+        "file": "<fixture>/main.rite",
+        "line": 16
+      },
+      "time_beats": 0.0
+    },
+    {
+      "daemon": "bass",
+      "duration_beats": 0.5,
+      "id": "evt_main_1_0",
+      "kind": "note",
+      "params": {
+        "cutoff_hz": 300.0,
+        "drive": 0.3
+      },
+      "pitch": {
+        "midi": 29,
+        "name": "F1"
+      },
+      "source": {
+        "column": 5,
+        "file": "<fixture>/main.rite",
+        "line": 17
+      },
+      "time_beats": 0.0
+    },
+    {
+      "daemon": "kick",
+      "duration_beats": 0.25,
+      "id": "evt_main_0_4",
+      "kind": "trigger",
+      "params": {
+        "gain_db": -3.0
+      },
+      "source": {
+        "column": 5,
+        "file": "<fixture>/main.rite",
+        "line": 16
+      },
+      "time_beats": 1.0
+    },
+    {
+      "daemon": "bass",
+      "duration_beats": 0.5,
+      "id": "evt_main_1_2",
+      "kind": "note",
+      "params": {
+        "cutoff_hz": 300.0,
+        "drive": 0.3
+      },
+      "pitch": {
+        "midi": 29,
+        "name": "F1"
+      },
+      "source": {
+        "column": 5,
+        "file": "<fixture>/main.rite",
+        "line": 17
+      },
+      "time_beats": 1.0
+    },
+    {
+      "daemon": "kick",
+      "duration_beats": 0.25,
+      "id": "evt_main_0_8",
+      "kind": "trigger",
+      "params": {
+        "gain_db": -3.0
+      },
+      "source": {
+        "column": 5,
+        "file": "<fixture>/main.rite",
+        "line": 16
+      },
+      "time_beats": 2.0
+    },
+    {
+      "daemon": "bass",
+      "duration_beats": 0.5,
+      "id": "evt_main_1_4",
+      "kind": "note",
+      "params": {
+        "cutoff_hz": 300.0,
+        "drive": 0.3
+      },
+      "pitch": {
+        "midi": 29,
+        "name": "F1"
+      },
+      "source": {
+        "column": 5,
+        "file": "<fixture>/main.rite",
+        "line": 17
+      },
+      "time_beats": 2.0
+    },
+    {
+      "daemon": "kick",
+      "duration_beats": 0.25,
+      "id": "evt_main_0_12",
+      "kind": "trigger",
+      "params": {
+        "gain_db": -3.0
+      },
+      "source": {
+        "column": 5,
+        "file": "<fixture>/main.rite",
+        "line": 16
+      },
+      "time_beats": 3.0
+    },
+    {
+      "daemon": "bass",
+      "duration_beats": 0.5,
+      "id": "evt_main_1_6",
+      "kind": "note",
+      "params": {
+        "cutoff_hz": 300.0,
+        "drive": 0.3
+      },
+      "pitch": {
+        "midi": 29,
+        "name": "F1"
+      },
+      "source": {
+        "column": 5,
+        "file": "<fixture>/main.rite",
+        "line": 17
+      },
+      "time_beats": 3.0
+    }
+  ],
+  "language": "0.1",
+  "meter": [
+    4,
+    4
+  ],
+  "rites": [
+    {
+      "duration_beats": 4.0,
+      "id": "main",
+      "start_beats": 0.0
+    }
+  ],
+  "seed": "cli",
+  "spells": [
+    {
+      "body": "x---",
+      "id": "kicks",
+      "kind": "pattern"
+    },
+    {
+      "body": "F1 -",
+      "id": "bassline",
+      "kind": "notes"
+    }
+  ],
+  "tempo_bpm": 128.0,
+  "working": "CLI Test"
+}

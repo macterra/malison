@@ -428,7 +428,7 @@ These are the most useful next tasks, in suggested order:
 
 1. Add CLI integration tests with `assert_cmd`. Done.
 2. Add event JSON snapshot tests with `insta`. Done.
-3. Implement `malison ir`.
+3. Implement `malison ir`. Done.
 4. Implement `malison scry` as a text event summary.
 5. Add rhythm accents with `X` and ghost notes with `g`.
 6. Add velocity to event IR and both renderers.

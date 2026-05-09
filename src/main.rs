@@ -24,6 +24,8 @@ struct Cli {
 enum Command {
     /// Parse and validate without rendering.
     Check { file: PathBuf },
+    /// Validate and print deterministic JSON IR.
+    Ir { file: PathBuf },
     /// Validate and print deterministic JSON events.
     Events { file: PathBuf },
     /// Compile and render audio.
@@ -62,6 +64,11 @@ fn run() -> Result<()> {
     match cli.command {
         Command::Check { file } => {
             load_and_compile(&file)?;
+            Ok(())
+        }
+        Command::Ir { file } => {
+            let compiled = load_and_compile(&file)?;
+            println!("{}", serde_json::to_string_pretty(&compiled.ir)?);
             Ok(())
         }
         Command::Events { file } => {

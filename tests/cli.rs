@@ -44,6 +44,30 @@ fn events_outputs_deterministic_json() {
 }
 
 #[test]
+fn ir_outputs_deterministic_json() {
+    let fixture = Fixture::new();
+
+    let output = Command::cargo_bin("malison")
+        .unwrap()
+        .arg("ir")
+        .arg(fixture.main_rite())
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let mut json: serde_json::Value = serde_json::from_slice(&output).unwrap();
+    normalize_source_files(&mut json);
+    assert_eq!(json["language"], "0.1");
+    assert_eq!(json["working"], "CLI Test");
+    assert_eq!(json["daemons"].as_array().unwrap().len(), 2);
+    assert_eq!(json["spells"].as_array().unwrap().len(), 2);
+    assert_eq!(json["rites"].as_array().unwrap().len(), 1);
+    insta::assert_json_snapshot!("ir_cli_test", json);
+}
+
+#[test]
 fn render_rust_backend_writes_wav() {
     let fixture = Fixture::new();
     let out = fixture.root.path().join("renders/cli-test.wav");
