@@ -105,7 +105,7 @@ Purpose: make IR a durable contract between the frontend, renderers, tests, and 
 * Define stable sort order for all emitted arrays. Done for current IR arrays.
 * Add snapshot tests proving unrelated whitespace and comments do not change events. Done for event semantics.
 * Add tests proving unrelated declarations do not perturb event IDs. Done for unused daemon and spell declarations.
-* Prepare seeded random streams even before probability is implemented.
+* Prepare seeded random streams even before probability is implemented. Done.
 
 ### Inspectability
 

@@ -10,6 +10,7 @@ pub struct Ir {
     pub tempo_bpm: f64,
     pub meter: [u32; 2],
     pub seed: String,
+    pub random_streams: Vec<IrRandomStream>,
     pub duration_beats: f64,
     pub daemons: Vec<IrDaemon>,
     pub spells: Vec<IrSpell>,
@@ -50,6 +51,13 @@ pub struct IrRenderTarget {
     pub kind: String,
     pub path: String,
     pub source: IrSource,
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub struct IrRandomStream {
+    pub id: String,
+    pub semantic_path: String,
+    pub seed_hash: String,
 }
 
 #[derive(Clone, Debug, Serialize)]

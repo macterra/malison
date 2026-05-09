@@ -4,7 +4,9 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
 
-use crate::ir::{Ir, IrDaemon, IrEvent, IrPitch, IrRenderTarget, IrRite, IrSource, IrSpell};
+use crate::ir::{
+    Ir, IrDaemon, IrEvent, IrPitch, IrRandomStream, IrRenderTarget, IrRite, IrSource, IrSpell,
+};
 use crate::parser::{DaemonKind, PatternKind, Value, Working};
 
 #[derive(Clone, Debug)]
@@ -175,6 +177,7 @@ pub fn compile_events(
             .then(a.id.cmp(&b.id))
     });
 
+    let random_streams = random_streams_for(&working);
     let evoke_wav = working.evoke_wav;
     let ir = Ir {
         ir_version: "0.1".to_string(),
@@ -183,6 +186,7 @@ pub fn compile_events(
         tempo_bpm: working.tempo_bpm,
         meter: [working.meter.0, working.meter.1],
         seed: working.seed,
+        random_streams,
         duration_beats: cursor_beats,
         daemons: working
             .daemons
@@ -226,6 +230,25 @@ pub fn compile_events(
         project_root: project_root.to_path_buf(),
         ir,
     })
+}
+
+fn random_streams_for(working: &Working) -> Vec<IrRandomStream> {
+    let mut streams = Vec::new();
+    let working_path = format!("working:{}", working.name);
+    streams.push(random_stream(&working.seed, "working", &working_path));
+    for spell in &working.spells {
+        let path = format!("{working_path}/spell:{}", spell.name);
+        streams.push(random_stream(&working.seed, &format!("spell:{}", spell.name), &path));
+    }
+    streams
+}
+
+fn random_stream(seed: &str, id: &str, semantic_path: &str) -> IrRandomStream {
+    IrRandomStream {
+        id: id.to_string(),
+        semantic_path: semantic_path.to_string(),
+        seed_hash: format!("{:016x}", stable_hash(&format!("{seed}:{semantic_path}"))),
+    }
 }
 
 fn validate_invokes(

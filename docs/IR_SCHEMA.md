@@ -19,6 +19,7 @@ The current schema version is `0.1`. Object keys are emitted in stable order, an
   "tempo_bpm": 128.0,
   "meter": [4, 4],
   "seed": "first",
+  "random_streams": [],
   "duration_beats": 4.0,
   "daemons": [],
   "spells": [],
@@ -27,6 +28,20 @@ The current schema version is `0.1`. Object keys are emitted in stable order, an
   "events": []
 }
 ```
+
+## Random Streams
+
+Random streams reserve stable identities for deterministic stochastic features.
+
+```json
+{
+  "id": "spell:kicks",
+  "semantic_path": "working:First Working/spell:kicks",
+  "seed_hash": "7db32f1e8aef4552"
+}
+```
+
+The stream hash is derived from the working seed and semantic path. Future probability and humanization features should draw from these streams instead of source locations.
 
 ## Daemons
 

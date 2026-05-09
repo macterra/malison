@@ -197,6 +197,23 @@ expression: json
     4,
     4
   ],
+  "random_streams": [
+    {
+      "id": "working",
+      "seed_hash": "800cd183db4baa28",
+      "semantic_path": "working:CLI Test"
+    },
+    {
+      "id": "spell:kicks",
+      "seed_hash": "3be9fc08dfb0e230",
+      "semantic_path": "working:CLI Test/spell:kicks"
+    },
+    {
+      "id": "spell:bassline",
+      "seed_hash": "7b2a6a9dec6e5c34",
+      "semantic_path": "working:CLI Test/spell:bassline"
+    }
+  ],
   "render_targets": [
     {
       "id": "wav",
