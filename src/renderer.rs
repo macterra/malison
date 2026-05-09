@@ -7,7 +7,8 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use anyhow::{Context, Result, bail};
 
-use crate::compiler::{CompiledWorking, IrDaemon, IrEvent};
+use crate::compiler::CompiledWorking;
+use crate::ir::{IrDaemon, IrEvent};
 
 const RENDER_TAIL_SECONDS: f64 = 2.0;
 

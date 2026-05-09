@@ -1,4 +1,5 @@
 mod compiler;
+mod ir;
 mod lexer;
 mod parser;
 mod renderer;

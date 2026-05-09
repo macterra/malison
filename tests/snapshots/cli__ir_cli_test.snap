@@ -165,6 +165,7 @@ expression: json
       "time_beats": 3.0
     }
   ],
+  "ir_version": "0.1",
   "language": "0.1",
   "meter": [
     4,

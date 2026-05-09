@@ -3,8 +3,8 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
-use serde::Serialize;
 
+use crate::ir::{Ir, IrDaemon, IrEvent, IrPitch, IrRite, IrSource, IrSpell};
 use crate::parser::{DaemonKind, PatternKind, Value, Working};
 
 #[derive(Clone, Debug)]
@@ -12,71 +12,6 @@ pub struct CompiledWorking {
     pub ir: Ir,
     pub evoke_wav: PathBuf,
     pub project_root: PathBuf,
-}
-
-#[derive(Clone, Debug, Serialize)]
-pub struct Ir {
-    pub language: String,
-    pub working: String,
-    pub tempo_bpm: f64,
-    pub meter: [u32; 2],
-    pub seed: String,
-    pub duration_beats: f64,
-    pub daemons: Vec<IrDaemon>,
-    pub spells: Vec<IrSpell>,
-    pub rites: Vec<IrRite>,
-    pub events: Vec<IrEvent>,
-}
-
-#[derive(Clone, Debug, Serialize)]
-pub struct IrDaemon {
-    pub id: String,
-    pub kind: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub sample: Option<String>,
-    pub params: BTreeMap<String, serde_json::Value>,
-}
-
-#[derive(Clone, Debug, Serialize)]
-pub struct IrSpell {
-    pub id: String,
-    pub kind: String,
-    pub body: String,
-}
-
-#[derive(Clone, Debug, Serialize)]
-pub struct IrRite {
-    pub id: String,
-    pub start_beats: f64,
-    pub duration_beats: f64,
-}
-
-#[derive(Clone, Debug, Serialize)]
-pub struct IrEvent {
-    pub id: String,
-    pub kind: String,
-    pub time_beats: f64,
-    pub duration_beats: f64,
-    pub daemon: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub pitch: Option<IrPitch>,
-    pub params: BTreeMap<String, serde_json::Value>,
-    pub source: IrSource,
-    #[serde(skip_serializing)]
-    pub source_order: usize,
-}
-
-#[derive(Clone, Debug, Serialize)]
-pub struct IrPitch {
-    pub name: String,
-    pub midi: i32,
-}
-
-#[derive(Clone, Debug, Serialize)]
-pub struct IrSource {
-    pub file: String,
-    pub line: usize,
-    pub column: usize,
 }
 
 pub fn project_root_for(input: &Path) -> Result<PathBuf> {
@@ -238,6 +173,7 @@ pub fn compile_events(
     });
 
     let ir = Ir {
+        ir_version: "0.1".to_string(),
         language: "0.1".to_string(),
         working: working.name,
         tempo_bpm: working.tempo_bpm,

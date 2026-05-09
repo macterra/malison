@@ -87,8 +87,8 @@ Purpose: make IR a durable contract between the frontend, renderers, tests, and 
 
 ### IR Schema
 
-* Move IR structs into a dedicated module.
-* Add explicit schema version, probably `"ir_version": "0.1"`.
+* Move IR structs into a dedicated module. Done.
+* Add explicit schema version, probably `"ir_version": "0.1"`. Done.
 * Include canonical units in field names:
   * `tempo_bpm`
   * `time_beats`
