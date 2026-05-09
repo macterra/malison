@@ -64,8 +64,8 @@ pub fn load_manifest(project_root: &Path) -> Result<Manifest> {
     if !path.exists() {
         return Ok(Manifest::default());
     }
-    let text =
-        fs::read_to_string(&path).with_context(|| format!("failed to read `{}`", path.display()))?;
+    let text = fs::read_to_string(&path)
+        .with_context(|| format!("failed to read `{}`", path.display()))?;
     let manifest = toml::from_str::<Manifest>(&text)
         .with_context(|| format!("failed to parse `{}`", path.display()))?;
     validate_manifest(&manifest)?;

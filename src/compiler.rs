@@ -194,30 +194,24 @@ pub fn compile_events(
                             DaemonKind::Sample | DaemonKind::NoiseBurst | DaemonKind::MetalHit,
                             PatternKind::Rhythm,
                         ) => {
-                            expand_rhythm(
+                            let context = ExpansionContext::new(
                                 input,
-                                &mut events,
                                 &rite.name,
                                 &working.seed,
                                 rite_start,
                                 duration_beats,
-                                invoke,
-                                spell,
-                                &params,
-                            )?;
+                            );
+                            expand_rhythm(&context, &mut events, invoke, spell, &params)?;
                         }
                         (DaemonKind::SawSub | DaemonKind::Swarm, PatternKind::Notes) => {
-                            expand_notes(
+                            let context = ExpansionContext::new(
                                 input,
-                                &mut events,
                                 &rite.name,
                                 &working.seed,
                                 rite_start,
                                 duration_beats,
-                                invoke,
-                                spell,
-                                &params,
-                            )?;
+                            );
+                            expand_notes(&context, &mut events, invoke, spell, &params)?;
                         }
                         _ => bail!(
                             "{}: daemon `{}` cannot be invoked with spell `{spell_name}`",
@@ -239,7 +233,10 @@ pub fn compile_events(
                             DaemonKind::NoiseBurst | DaemonKind::MetalHit => "trigger".to_string(),
                         },
                         time_beats: rite_start,
-                        duration_beats: if matches!(daemon.kind, DaemonKind::Drone | DaemonKind::Swarm) {
+                        duration_beats: if matches!(
+                            daemon.kind,
+                            DaemonKind::Drone | DaemonKind::Swarm
+                        ) {
                             duration_beats
                         } else {
                             invoke.every.map(|duration| duration.beats).unwrap_or(0.25)
@@ -344,7 +341,11 @@ fn random_streams_for(working: &Working) -> Vec<IrRandomStream> {
     streams.push(random_stream(&working.seed, "working", &working_path));
     for spell in &working.spells {
         let path = format!("{working_path}/spell:{}", spell.name);
-        streams.push(random_stream(&working.seed, &format!("spell:{}", spell.name), &path));
+        streams.push(random_stream(
+            &working.seed,
+            &format!("spell:{}", spell.name),
+            &path,
+        ));
     }
     streams
 }
@@ -368,7 +369,10 @@ fn validate_invokes(
             if let Some(every) = invoke.every
                 && every.beats <= 0.0
             {
-                errors.push(format!("{}: `every` duration must be positive", invoke.span));
+                errors.push(format!(
+                    "{}: `every` duration must be positive",
+                    invoke.span
+                ));
             }
             let Some(daemon) = daemon_map.get(invoke.daemon.as_str()) else {
                 errors.push(
@@ -389,8 +393,13 @@ fn validate_invokes(
             if let Some(spell_name) = &invoke.spell {
                 let Some(spell) = spell_map.get(spell_name.as_str()) else {
                     errors.push(
-                        unresolved_name("spell", spell_name, spell_map.keys().copied(), invoke.span)
-                            .to_string(),
+                        unresolved_name(
+                            "spell",
+                            spell_name,
+                            spell_map.keys().copied(),
+                            invoke.span,
+                        )
+                        .to_string(),
                     );
                     continue;
                 };
@@ -420,7 +429,10 @@ fn validate_circles(working: &Working) -> Result<()> {
     let mut parents = BTreeMap::new();
     parents.insert("master", None::<&str>);
     for circle in &working.circles {
-        parents.insert(circle.name.as_str(), circle.parent.as_deref().or(Some("master")));
+        parents.insert(
+            circle.name.as_str(),
+            circle.parent.as_deref().or(Some("master")),
+        );
     }
     for circle in &working.circles {
         for ward in &circle.wards {
@@ -435,7 +447,11 @@ fn validate_circles(working: &Working) -> Result<()> {
         let mut cursor = circle.name.as_str();
         while let Some(Some(parent)) = parents.get(cursor) {
             if !seen.insert(cursor) {
-                bail!("{}: routing cycle involving circle `{}`", circle.span, circle.name);
+                bail!(
+                    "{}: routing cycle involving circle `{}`",
+                    circle.span,
+                    circle.name
+                );
             }
             cursor = parent;
         }
@@ -460,20 +476,22 @@ fn ir_circles(input: &Path, working: &Working) -> Vec<IrCircle> {
         wards: Vec::new(),
         source: source_for_span(input, working.evoke_span),
     }];
-    circles.extend(working.circles.iter().map(|circle| IrCircle {
-        id: circle.name.clone(),
-        parent: circle.parent.clone().or_else(|| Some("master".to_string())),
-        wards: circle
-            .wards
-            .iter()
-            .map(|ward| IrWard {
-                kind: ward.kind.clone(),
-                param: ward.param.clone(),
-                value: ward.value,
-                source: source_for_span(input, ward.span),
-            })
-            .collect(),
-        source: source_for_span(input, circle.span),
+    circles.extend(working.circles.iter().map(|circle| {
+        IrCircle {
+            id: circle.name.clone(),
+            parent: circle.parent.clone().or_else(|| Some("master".to_string())),
+            wards: circle
+                .wards
+                .iter()
+                .map(|ward| IrWard {
+                    kind: ward.kind.clone(),
+                    param: ward.param.clone(),
+                    value: ward.value,
+                    source: source_for_span(input, ward.span),
+                })
+                .collect(),
+            source: source_for_span(input, circle.span),
+        }
     }));
     circles
 }
@@ -508,13 +526,35 @@ fn validate_control_target(target: &str, span: crate::lexer::Span) -> Result<()>
     }
 }
 
-fn expand_rhythm(
-    input: &Path,
-    events: &mut Vec<IrEvent>,
-    rite_name: &str,
-    seed: &str,
+struct ExpansionContext<'a> {
+    input: &'a Path,
+    rite_name: &'a str,
+    seed: &'a str,
     rite_start: f64,
     rite_duration: f64,
+}
+
+impl<'a> ExpansionContext<'a> {
+    fn new(
+        input: &'a Path,
+        rite_name: &'a str,
+        seed: &'a str,
+        rite_start: f64,
+        rite_duration: f64,
+    ) -> Self {
+        Self {
+            input,
+            rite_name,
+            seed,
+            rite_start,
+            rite_duration,
+        }
+    }
+}
+
+fn expand_rhythm(
+    context: &ExpansionContext<'_>,
+    events: &mut Vec<IrEvent>,
     invoke: &crate::parser::Invoke,
     spell: &crate::parser::Spell,
     params: &BTreeMap<String, serde_json::Value>,
@@ -526,28 +566,31 @@ fn expand_rhythm(
         .or_else(|| transform_every(&spell.transforms))
         .map(|duration| duration.beats)
         .unwrap_or(0.25);
-    let total_steps = (rite_duration / step_duration).ceil() as usize;
+    let total_steps = (context.rite_duration / step_duration).ceil() as usize;
     for absolute_step in 0..total_steps {
         let time = absolute_step as f64 * step_duration;
-        if time >= rite_duration {
+        if time >= context.rite_duration {
             break;
         }
-        let (id, semantic_path) =
-            event_identity(rite_name, invoke.source_order, &absolute_step.to_string());
+        let (id, semantic_path) = event_identity(
+            context.rite_name,
+            invoke.source_order,
+            &absolute_step.to_string(),
+        );
         if let Some(mut velocity) = stochastic_rhythm_step(
-            seed,
+            context.seed,
             &semantic_path,
             absolute_step,
             steps[absolute_step % steps.len()],
             &spell.transforms,
         )? {
             let event_time = humanized_time(
-                seed,
+                context.seed,
                 &semantic_path,
                 absolute_step,
-                rite_start,
+                context.rite_start,
                 time,
-                rite_duration,
+                context.rite_duration,
                 &spell.transforms,
             )?;
             velocity = velocity.clamp(0.0, 4.0);
@@ -561,7 +604,7 @@ fn expand_rhythm(
                 velocity,
                 pitch: None,
                 params: params.clone(),
-                source: source_for(input, invoke),
+                source: source_for(context.input, invoke),
                 source_order: invoke.source_order,
             });
         }
@@ -570,12 +613,8 @@ fn expand_rhythm(
 }
 
 fn expand_notes(
-    input: &Path,
+    context: &ExpansionContext<'_>,
     events: &mut Vec<IrEvent>,
-    rite_name: &str,
-    seed: &str,
-    rite_start: f64,
-    rite_duration: f64,
     invoke: &crate::parser::Invoke,
     spell: &crate::parser::Spell,
     params: &BTreeMap<String, serde_json::Value>,
@@ -587,29 +626,38 @@ fn expand_notes(
         .or_else(|| transform_every(&spell.transforms))
         .map(|duration| duration.beats)
         .unwrap_or(0.5);
-    let total_steps = (rite_duration / step_duration).ceil() as usize;
+    let total_steps = (context.rite_duration / step_duration).ceil() as usize;
     for absolute_step in 0..total_steps {
         let time = absolute_step as f64 * step_duration;
-        if time >= rite_duration {
+        if time >= context.rite_duration {
             break;
         }
-        let (id, semantic_path) =
-            event_identity(rite_name, invoke.source_order, &absolute_step.to_string());
+        let (id, semantic_path) = event_identity(
+            context.rite_name,
+            invoke.source_order,
+            &absolute_step.to_string(),
+        );
         if let Some(pitch_name) = stochastic_note_step(
-            seed,
+            context.seed,
             &semantic_path,
             absolute_step,
             steps[absolute_step % steps.len()].as_ref(),
             &spell.transforms,
         )? {
-            let velocity = stochastic_velocity(seed, &semantic_path, absolute_step, 1.0, &spell.transforms)?;
-            let event_time = humanized_time(
-                seed,
+            let velocity = stochastic_velocity(
+                context.seed,
                 &semantic_path,
                 absolute_step,
-                rite_start,
+                1.0,
+                &spell.transforms,
+            )?;
+            let event_time = humanized_time(
+                context.seed,
+                &semantic_path,
+                absolute_step,
+                context.rite_start,
                 time,
-                rite_duration,
+                context.rite_duration,
                 &spell.transforms,
             )?;
             events.push(IrEvent {
@@ -625,7 +673,7 @@ fn expand_notes(
                     midi: pitch_to_midi(pitch_name)?,
                 }),
                 params: params.clone(),
-                source: source_for(input, invoke),
+                source: source_for(context.input, invoke),
                 source_order: invoke.source_order,
             });
         }
@@ -725,7 +773,8 @@ fn stochastic_rhythm_step(
     for transform in transforms {
         match transform {
             PatternTransform::Degrade(amount)
-                if value.is_some() && random_unit(seed, semantic_path, step, "degrade") < *amount =>
+                if value.is_some()
+                    && random_unit(seed, semantic_path, step, "degrade") < *amount =>
             {
                 value = None;
             }
@@ -975,10 +1024,7 @@ fn validate_sample_path(project_root: &Path, config: &ProjectConfig, sample: &st
     let direct_path = project_root.join(sample);
     let manifest_path = project_root.join(&config.sample_dir).join(sample);
     if !direct_path.exists() && !manifest_path.exists() {
-        bail!(
-            "sample file `{}` does not exist",
-            manifest_path.display()
-        );
+        bail!("sample file `{}` does not exist", manifest_path.display());
     }
     Ok(())
 }
@@ -1016,13 +1062,22 @@ fn validate_params(owner: &str, kind: DaemonKind, params: &[crate::parser::Param
                 "gain" | "pan" | "tune" | "highpass" | "lowpass" | "start" | "end" | "out"
             ),
             DaemonKind::SawSub => {
-                matches!(param.name.as_str(), "gain" | "pan" | "cutoff" | "drive" | "out")
+                matches!(
+                    param.name.as_str(),
+                    "gain" | "pan" | "cutoff" | "drive" | "out"
+                )
             }
             DaemonKind::Drone => {
-                matches!(param.name.as_str(), "gain" | "pan" | "cutoff" | "drive" | "root" | "out")
+                matches!(
+                    param.name.as_str(),
+                    "gain" | "pan" | "cutoff" | "drive" | "root" | "out"
+                )
             }
             DaemonKind::NoiseBurst => {
-                matches!(param.name.as_str(), "gain" | "pan" | "highpass" | "lowpass" | "drive" | "out")
+                matches!(
+                    param.name.as_str(),
+                    "gain" | "pan" | "highpass" | "lowpass" | "drive" | "out"
+                )
             }
             DaemonKind::Swarm => {
                 matches!(
@@ -1031,7 +1086,10 @@ fn validate_params(owner: &str, kind: DaemonKind, params: &[crate::parser::Param
                 )
             }
             DaemonKind::MetalHit => {
-                matches!(param.name.as_str(), "gain" | "pan" | "root" | "drive" | "decay" | "out")
+                matches!(
+                    param.name.as_str(),
+                    "gain" | "pan" | "root" | "drive" | "decay" | "out"
+                )
             }
         };
         if !allowed {
@@ -1268,8 +1326,7 @@ working "Velocity Test" {
 
     #[test]
     fn expands_euclidean_rhythm_spells() {
-        let root =
-            std::env::temp_dir().join(format!("malison-euclid-test-{}", std::process::id()));
+        let root = std::env::temp_dir().join(format!("malison-euclid-test-{}", std::process::id()));
         let _ = fs::remove_dir_all(&root);
         fs::create_dir_all(root.join("samples")).unwrap();
         fs::write(root.join("samples/kick.wav"), b"not really wav").unwrap();
@@ -1355,7 +1412,12 @@ working "Euclid Rotate Test" {
             euclid_steps(4, 4).unwrap(),
             vec![Some(1.0), Some(1.0), Some(1.0), Some(1.0)]
         );
-        assert!(euclid_steps(1, 0).unwrap_err().to_string().contains("at least one step"));
+        assert!(
+            euclid_steps(1, 0)
+                .unwrap_err()
+                .to_string()
+                .contains("at least one step")
+        );
         assert!(
             euclid_steps(5, 4)
                 .unwrap_err()
@@ -1407,8 +1469,7 @@ working "Transform Test" {
 
     #[test]
     fn pattern_every_supplies_default_step_duration() {
-        let root =
-            std::env::temp_dir().join(format!("malison-every-test-{}", std::process::id()));
+        let root = std::env::temp_dir().join(format!("malison-every-test-{}", std::process::id()));
         let _ = fs::remove_dir_all(&root);
         fs::create_dir_all(root.join("samples")).unwrap();
         fs::write(root.join("samples/kick.wav"), b"not really wav").unwrap();
@@ -1483,12 +1544,16 @@ working "Stochastic Test" {
             .map(|event| (event.time_beats, event.velocity))
             .collect::<Vec<_>>();
         assert!(!first_pass.is_empty());
-        assert!(first_pass
-            .iter()
-            .all(|(time, velocity)| (0.0..=4.0).contains(time) && (0.5..=0.75).contains(velocity)));
+        assert!(
+            first_pass
+                .iter()
+                .all(|(time, velocity)| (0.0..=4.0).contains(time)
+                    && (0.5..=0.75).contains(velocity))
+        );
 
         let working = parse_source(&path, source).unwrap();
-        let compiled_again = compile_events(&path, &root, &ProjectConfig::default(), working).unwrap();
+        let compiled_again =
+            compile_events(&path, &root, &ProjectConfig::default(), working).unwrap();
         let second_pass = compiled_again
             .ir
             .events
@@ -1550,7 +1615,9 @@ working "Arrangement Test" {
         let overlapping = source.replace("rite drop at bar 3", "rite drop at bar 1");
         fs::write(&path, &overlapping).unwrap();
         let working = parse_source(&path, &overlapping).unwrap();
-        let error = compile_events(&path, &root, &ProjectConfig::default(), working).unwrap_err().to_string();
+        let error = compile_events(&path, &root, &ProjectConfig::default(), working)
+            .unwrap_err()
+            .to_string();
         assert!(error.contains("overlaps rite `intro`"));
 
         fs::remove_dir_all(&root).unwrap();
@@ -1668,7 +1735,9 @@ working "Circle Test" {
         let bad = source.replace("out drums", "out nowhere");
         fs::write(&path, &bad).unwrap();
         let working = parse_source(&path, &bad).unwrap();
-        let error = compile_events(&path, &root, &ProjectConfig::default(), working).unwrap_err().to_string();
+        let error = compile_events(&path, &root, &ProjectConfig::default(), working)
+            .unwrap_err()
+            .to_string();
         assert!(error.contains("unresolved circle `nowhere`"));
 
         fs::remove_dir_all(&root).unwrap();

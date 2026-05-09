@@ -405,25 +405,25 @@ Purpose: package Malison as a real tool.
 
 ### Quality
 
-* Add CI for formatting, clippy, tests, and example renders.
-* Add fixture render smoke tests with generated artifacts excluded from git.
-* Add platform notes for Linux/macOS/Windows.
+* Add CI for formatting, clippy, tests, and example renders. Done.
+* Add fixture render smoke tests with generated artifacts excluded from git. Done in CI.
+* Add platform notes for Linux/macOS/Windows. Done.
 * Add deterministic build metadata.
 
 ### Distribution
 
 * Publish binary artifacts for releases.
-* Document SuperCollider installation as optional.
-* Include example projects.
-* Add changelog.
+* Document SuperCollider installation as optional. Done.
+* Include example projects. Done.
+* Add changelog. Done.
 
 ### Documentation
 
-* Tutorial: first `.rite`.
-* Reference: language `0.1`.
+* Tutorial: first `.rite`. Done.
+* Reference: language `0.1`. Done.
 * Reference: IR schema.
 * Reference: backend capabilities. Done.
-* Guide: debugging with `events`, `ir`, `graph`, and `scry`.
+* Guide: debugging with `events`, `ir`, `graph`, and `scry`. Done.
 
 ### Exit Criteria
 

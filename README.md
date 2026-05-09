@@ -46,3 +46,11 @@ cargo test
 ```
 
 The current JSON IR contract is documented in [docs/IR_SCHEMA.md](docs/IR_SCHEMA.md).
+
+Additional docs:
+
+* [First Rite tutorial](docs/FIRST_RITE.md)
+* [Language 0.1 reference](docs/LANGUAGE_0_1.md)
+* [Backend capabilities](docs/BACKEND_CAPABILITIES.md)
+* [Debugging guide](docs/DEBUGGING.md)
+* [Platform notes](docs/PLATFORMS.md)

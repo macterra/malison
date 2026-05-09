@@ -53,14 +53,22 @@ pub fn backend_capabilities() -> BackendCapabilities {
                 daemon_kinds: daemon_kinds.clone(),
                 sample_features: sample_features.clone(),
                 pattern_features: pattern_features.clone(),
-                unsupported: vec!["audio_bus_routing", "effect_processors", "parameter_bindings"],
+                unsupported: vec![
+                    "audio_bus_routing",
+                    "effect_processors",
+                    "parameter_bindings",
+                ],
             },
             BackendCapability {
                 name: "supercollider",
                 daemon_kinds,
                 sample_features,
                 pattern_features,
-                unsupported: vec!["audio_bus_routing", "effect_processors", "parameter_bindings"],
+                unsupported: vec![
+                    "audio_bus_routing",
+                    "effect_processors",
+                    "parameter_bindings",
+                ],
             },
         ],
     }
@@ -96,9 +104,13 @@ pub fn render_wav(
             "sample" => render_sample(compiled, daemon, event, sample_rate, &mut buffer)?,
             "saw_sub" => render_saw_sub(event, &compiled.ir.tempo_bpm, sample_rate, &mut buffer),
             "drone" => render_drone(event, &compiled.ir.tempo_bpm, sample_rate, &mut buffer),
-            "noise_burst" => render_noise_burst(event, &compiled.ir.tempo_bpm, sample_rate, &mut buffer),
+            "noise_burst" => {
+                render_noise_burst(event, &compiled.ir.tempo_bpm, sample_rate, &mut buffer)
+            }
             "swarm" => render_swarm(event, &compiled.ir.tempo_bpm, sample_rate, &mut buffer),
-            "metal_hit" => render_metal_hit(event, &compiled.ir.tempo_bpm, sample_rate, &mut buffer),
+            "metal_hit" => {
+                render_metal_hit(event, &compiled.ir.tempo_bpm, sample_rate, &mut buffer)
+            }
             other => bail!("unsupported daemon kind `{other}`"),
         }
     }
@@ -182,13 +194,14 @@ pub fn supercollider_script(
         }
     }
 
-    let mut score_lines = Vec::new();
-    score_lines.push("[0.0, [\\d_recv, SynthDef(\\mal_sample, { |out=0, bufnum=0, amp=1, pan=0, rate=1, start=0, dur=999| var sig, env; env = Line.kr(1, 1, dur, doneAction:2); sig = PlayBuf.ar(1, bufnum, BufRateScale.kr(bufnum) * rate, startPos:start); Out.ar(out, Pan2.ar(sig * env * amp, pan)); }).asBytes]]".to_string());
-    score_lines.push("[0.0, [\\d_recv, SynthDef(\\mal_saw_sub, { |out=0, freq=55, dur=0.25, amp=0.3, pan=0, cutoff=1200, drive=0| var hold, env, sig, driven; hold = (dur - 0.19).max(0.001); env = EnvGen.kr(Env([0, 1, 0.65, 0.65, 0], [0.01, 0.18, hold, 0.08]), doneAction:2); sig = (Saw.ar(freq) * 0.72) + (Saw.ar(freq * 0.5) * 0.28); sig = RLPF.ar(sig, cutoff.clip(20, 20000), 0.35); driven = (sig * (1 + (drive * 12))).tanh; Out.ar(out, Pan2.ar(driven * env * amp, pan)); }).asBytes]]".to_string());
-    score_lines.push("[0.0, [\\d_recv, SynthDef(\\mal_drone, { |out=0, freq=43.65, dur=4, amp=0.18, pan=0, cutoff=900, drive=0| var env, sig, driven; env = EnvGen.kr(Env([0, 1, 1, 0], [0.5, (dur - 1).max(0.1), 0.5]), doneAction:2); sig = (SinOsc.ar(freq) * 0.55) + (Saw.ar(freq * 0.5) * 0.25) + (SinOsc.ar(freq * 1.5) * 0.2); sig = RLPF.ar(sig, cutoff.clip(20, 20000), 0.2); driven = (sig * (1 + (drive * 8))).tanh; Out.ar(out, Pan2.ar(driven * env * amp, pan)); }).asBytes]]".to_string());
-    score_lines.push("[0.0, [\\d_recv, SynthDef(\\mal_noise_burst, { |out=0, dur=0.2, amp=0.3, pan=0, highpass=80, lowpass=9000, drive=0| var env, sig; env = EnvGen.kr(Env.perc(0.002, dur.max(0.01)), doneAction:2); sig = WhiteNoise.ar; sig = HPF.ar(LPF.ar(sig, lowpass.clip(20, 20000)), highpass.clip(20, 20000)); sig = (sig * (1 + (drive * 10))).tanh; Out.ar(out, Pan2.ar(sig * env * amp, pan)); }).asBytes]]".to_string());
-    score_lines.push("[0.0, [\\d_recv, SynthDef(\\mal_swarm, { |out=0, freq=43.65, dur=4, amp=0.15, pan=0, cutoff=1400, drive=0| var env, sig; env = EnvGen.kr(Env([0, 1, 1, 0], [0.8, (dur - 1.6).max(0.1), 0.8]), doneAction:2); sig = Mix.fill(7, { |i| Saw.ar(freq * (1 + ((i - 3) * 0.004))) }) / 7; sig = RLPF.ar(sig, cutoff.clip(20, 20000), 0.25); sig = (sig * (1 + (drive * 8))).tanh; Out.ar(out, Pan2.ar(sig * env * amp, pan)); }).asBytes]]".to_string());
-    score_lines.push("[0.0, [\\d_recv, SynthDef(\\mal_metal_hit, { |out=0, freq=110, decay=1, amp=0.35, pan=0, drive=0| var env, sig; env = EnvGen.kr(Env.perc(0.001, decay.max(0.02)), doneAction:2); sig = SinOsc.ar(freq * 1.0) + SinOsc.ar(freq * 2.71) + SinOsc.ar(freq * 4.39); sig = sig / 3; sig = (sig * (1 + (drive * 12))).tanh; Out.ar(out, Pan2.ar(sig * env * amp, pan)); }).asBytes]]".to_string());
+    let mut score_lines = vec![
+        "[0.0, [\\d_recv, SynthDef(\\mal_sample, { |out=0, bufnum=0, amp=1, pan=0, rate=1, start=0, dur=999| var sig, env; env = Line.kr(1, 1, dur, doneAction:2); sig = PlayBuf.ar(1, bufnum, BufRateScale.kr(bufnum) * rate, startPos:start); Out.ar(out, Pan2.ar(sig * env * amp, pan)); }).asBytes]]".to_string(),
+        "[0.0, [\\d_recv, SynthDef(\\mal_saw_sub, { |out=0, freq=55, dur=0.25, amp=0.3, pan=0, cutoff=1200, drive=0| var hold, env, sig, driven; hold = (dur - 0.19).max(0.001); env = EnvGen.kr(Env([0, 1, 0.65, 0.65, 0], [0.01, 0.18, hold, 0.08]), doneAction:2); sig = (Saw.ar(freq) * 0.72) + (Saw.ar(freq * 0.5) * 0.28); sig = RLPF.ar(sig, cutoff.clip(20, 20000), 0.35); driven = (sig * (1 + (drive * 12))).tanh; Out.ar(out, Pan2.ar(driven * env * amp, pan)); }).asBytes]]".to_string(),
+        "[0.0, [\\d_recv, SynthDef(\\mal_drone, { |out=0, freq=43.65, dur=4, amp=0.18, pan=0, cutoff=900, drive=0| var env, sig, driven; env = EnvGen.kr(Env([0, 1, 1, 0], [0.5, (dur - 1).max(0.1), 0.5]), doneAction:2); sig = (SinOsc.ar(freq) * 0.55) + (Saw.ar(freq * 0.5) * 0.25) + (SinOsc.ar(freq * 1.5) * 0.2); sig = RLPF.ar(sig, cutoff.clip(20, 20000), 0.2); driven = (sig * (1 + (drive * 8))).tanh; Out.ar(out, Pan2.ar(driven * env * amp, pan)); }).asBytes]]".to_string(),
+        "[0.0, [\\d_recv, SynthDef(\\mal_noise_burst, { |out=0, dur=0.2, amp=0.3, pan=0, highpass=80, lowpass=9000, drive=0| var env, sig; env = EnvGen.kr(Env.perc(0.002, dur.max(0.01)), doneAction:2); sig = WhiteNoise.ar; sig = HPF.ar(LPF.ar(sig, lowpass.clip(20, 20000)), highpass.clip(20, 20000)); sig = (sig * (1 + (drive * 10))).tanh; Out.ar(out, Pan2.ar(sig * env * amp, pan)); }).asBytes]]".to_string(),
+        "[0.0, [\\d_recv, SynthDef(\\mal_swarm, { |out=0, freq=43.65, dur=4, amp=0.15, pan=0, cutoff=1400, drive=0| var env, sig; env = EnvGen.kr(Env([0, 1, 1, 0], [0.8, (dur - 1.6).max(0.1), 0.8]), doneAction:2); sig = Mix.fill(7, { |i| Saw.ar(freq * (1 + ((i - 3) * 0.004))) }) / 7; sig = RLPF.ar(sig, cutoff.clip(20, 20000), 0.25); sig = (sig * (1 + (drive * 8))).tanh; Out.ar(out, Pan2.ar(sig * env * amp, pan)); }).asBytes]]".to_string(),
+        "[0.0, [\\d_recv, SynthDef(\\mal_metal_hit, { |out=0, freq=110, decay=1, amp=0.35, pan=0, drive=0| var env, sig; env = EnvGen.kr(Env.perc(0.001, decay.max(0.02)), doneAction:2); sig = SinOsc.ar(freq * 1.0) + SinOsc.ar(freq * 2.71) + SinOsc.ar(freq * 4.39); sig = sig / 3; sig = (sig * (1 + (drive * 12))).tanh; Out.ar(out, Pan2.ar(sig * env * amp, pan)); }).asBytes]]".to_string(),
+    ];
 
     for daemon in &compiled.ir.daemons {
         if daemon.kind == "sample" {
@@ -262,8 +275,8 @@ pub fn supercollider_script(
                     .map(|pitch| midi_to_freq(pitch.midi))
                     .unwrap_or_else(|| midi_to_freq(29));
                 let dur = beats_to_seconds(event.duration_beats, compiled.ir.tempo_bpm);
-                let amp =
-                    db_to_amp(param_f64(&event.params, "gain_db").unwrap_or(-14.0)) * event.velocity;
+                let amp = db_to_amp(param_f64(&event.params, "gain_db").unwrap_or(-14.0))
+                    * event.velocity;
                 let pan = param_f64(&event.params, "pan")
                     .unwrap_or(0.0)
                     .clamp(-1.0, 1.0);
@@ -280,10 +293,14 @@ pub fn supercollider_script(
                 let dur = beats_to_seconds(event.duration_beats, compiled.ir.tempo_bpm);
                 let amp =
                     db_to_amp(param_f64(&event.params, "gain_db").unwrap_or(-8.0)) * event.velocity;
-                let pan = param_f64(&event.params, "pan").unwrap_or(0.0).clamp(-1.0, 1.0);
+                let pan = param_f64(&event.params, "pan")
+                    .unwrap_or(0.0)
+                    .clamp(-1.0, 1.0);
                 let highpass = param_f64(&event.params, "highpass_hz").unwrap_or(80.0);
                 let lowpass = param_f64(&event.params, "lowpass_hz").unwrap_or(9000.0);
-                let drive = param_f64(&event.params, "drive").unwrap_or(0.0).clamp(0.0, 1.0);
+                let drive = param_f64(&event.params, "drive")
+                    .unwrap_or(0.0)
+                    .clamp(0.0, 1.0);
                 score_lines.push(format!(
                     "[{time:.6}, [\\s_new, \\mal_noise_burst, {node_id}, 0, 1, \\dur, {dur:.8}, \\amp, {amp:.8}, \\pan, {pan:.8}, \\highpass, {highpass:.8}, \\lowpass, {lowpass:.8}, \\drive, {drive:.8}]]"
                 ));
@@ -296,11 +313,15 @@ pub fn supercollider_script(
                     .map(|pitch| midi_to_freq(pitch.midi))
                     .unwrap_or_else(|| midi_to_freq(29));
                 let dur = beats_to_seconds(event.duration_beats, compiled.ir.tempo_bpm);
-                let amp =
-                    db_to_amp(param_f64(&event.params, "gain_db").unwrap_or(-16.0)) * event.velocity;
-                let pan = param_f64(&event.params, "pan").unwrap_or(0.0).clamp(-1.0, 1.0);
+                let amp = db_to_amp(param_f64(&event.params, "gain_db").unwrap_or(-16.0))
+                    * event.velocity;
+                let pan = param_f64(&event.params, "pan")
+                    .unwrap_or(0.0)
+                    .clamp(-1.0, 1.0);
                 let cutoff = param_f64(&event.params, "cutoff_hz").unwrap_or(1400.0);
-                let drive = param_f64(&event.params, "drive").unwrap_or(0.0).clamp(0.0, 1.0);
+                let drive = param_f64(&event.params, "drive")
+                    .unwrap_or(0.0)
+                    .clamp(0.0, 1.0);
                 score_lines.push(format!(
                     "[{time:.6}, [\\s_new, \\mal_swarm, {node_id}, 0, 1, \\freq, {freq:.8}, \\dur, {dur:.8}, \\amp, {amp:.8}, \\pan, {pan:.8}, \\cutoff, {cutoff:.8}, \\drive, {drive:.8}]]"
                 ));
@@ -315,8 +336,12 @@ pub fn supercollider_script(
                 let decay = param_f64(&event.params, "decay_seconds").unwrap_or(1.0);
                 let amp =
                     db_to_amp(param_f64(&event.params, "gain_db").unwrap_or(-8.0)) * event.velocity;
-                let pan = param_f64(&event.params, "pan").unwrap_or(0.0).clamp(-1.0, 1.0);
-                let drive = param_f64(&event.params, "drive").unwrap_or(0.0).clamp(0.0, 1.0);
+                let pan = param_f64(&event.params, "pan")
+                    .unwrap_or(0.0)
+                    .clamp(-1.0, 1.0);
+                let drive = param_f64(&event.params, "drive")
+                    .unwrap_or(0.0)
+                    .clamp(0.0, 1.0);
                 score_lines.push(format!(
                     "[{time:.6}, [\\s_new, \\mal_metal_hit, {node_id}, 0, 1, \\freq, {freq:.8}, \\decay, {decay:.8}, \\amp, {amp:.8}, \\pan, {pan:.8}, \\drive, {drive:.8}]]"
                 ));
@@ -469,12 +494,7 @@ fn render_drone(event: &IrEvent, tempo_bpm: &f64, sample_rate: u32, buffer: &mut
     mix_frames(buffer, start, &frames_out, 1.0, pan);
 }
 
-fn render_noise_burst(
-    event: &IrEvent,
-    tempo_bpm: &f64,
-    sample_rate: u32,
-    buffer: &mut [[f32; 2]],
-) {
+fn render_noise_burst(event: &IrEvent, tempo_bpm: &f64, sample_rate: u32, buffer: &mut [[f32; 2]]) {
     let start = seconds_to_frame(beats_to_seconds(event.time_beats, *tempo_bpm), sample_rate);
     let seconds = beats_to_seconds(event.duration_beats, *tempo_bpm).max(0.02);
     let frames = (seconds * sample_rate as f64).ceil() as usize;
@@ -532,7 +552,9 @@ fn render_swarm(event: &IrEvent, tempo_bpm: &f64, sample_rate: u32, buffer: &mut
 
 fn render_metal_hit(event: &IrEvent, tempo_bpm: &f64, sample_rate: u32, buffer: &mut [[f32; 2]]) {
     let start = seconds_to_frame(beats_to_seconds(event.time_beats, *tempo_bpm), sample_rate);
-    let decay = param_f64(&event.params, "decay_seconds").unwrap_or(1.0).max(0.02);
+    let decay = param_f64(&event.params, "decay_seconds")
+        .unwrap_or(1.0)
+        .max(0.02);
     let frames = (decay * sample_rate as f64).ceil() as usize;
     let midi = event.pitch.as_ref().map(|pitch| pitch.midi).unwrap_or(45);
     let freq = 440.0_f32 * 2.0_f32.powf((midi as f32 - 69.0) / 12.0);
@@ -818,7 +840,13 @@ working "Render Test" {
         fs::write(&path, source).unwrap();
         let working = parse_source(&path, source).unwrap();
         let project_root = project_root_for(&path).unwrap();
-        let compiled = compile_events(&path, &project_root, &crate::compiler::ProjectConfig::default(), working).unwrap();
+        let compiled = compile_events(
+            &path,
+            &project_root,
+            &crate::compiler::ProjectConfig::default(),
+            working,
+        )
+        .unwrap();
         let out = root.join("renders/render-test.wav");
 
         render_wav(&compiled, &out, 48_000, 24).unwrap();
@@ -864,7 +892,13 @@ working "SC Test" {
         fs::write(&path, source).unwrap();
         let working = parse_source(&path, source).unwrap();
         let project_root = project_root_for(&path).unwrap();
-        let compiled = compile_events(&path, &project_root, &crate::compiler::ProjectConfig::default(), working).unwrap();
+        let compiled = compile_events(
+            &path,
+            &project_root,
+            &crate::compiler::ProjectConfig::default(),
+            working,
+        )
+        .unwrap();
         let script =
             supercollider_script(&compiled, &root.join("renders/sc-test.wav"), 48_000, 24).unwrap();
 
@@ -912,7 +946,13 @@ working "Stereo Sample Test" {
         fs::write(&path, source).unwrap();
         let working = parse_source(&path, source).unwrap();
         let project_root = project_root_for(&path).unwrap();
-        let compiled = compile_events(&path, &project_root, &crate::compiler::ProjectConfig::default(), working).unwrap();
+        let compiled = compile_events(
+            &path,
+            &project_root,
+            &crate::compiler::ProjectConfig::default(),
+            working,
+        )
+        .unwrap();
         let out = root.join("renders/test.wav");
         render_wav(&compiled, &out, 48_000, 24).unwrap();
 
@@ -967,7 +1007,13 @@ working "Archetype Test" {
         fs::write(&path, source).unwrap();
         let working = parse_source(&path, source).unwrap();
         let project_root = project_root_for(&path).unwrap();
-        let compiled = compile_events(&path, &project_root, &crate::compiler::ProjectConfig::default(), working).unwrap();
+        let compiled = compile_events(
+            &path,
+            &project_root,
+            &crate::compiler::ProjectConfig::default(),
+            working,
+        )
+        .unwrap();
         let out = root.join("renders/test.wav");
         render_wav(&compiled, &out, 48_000, 24).unwrap();
 

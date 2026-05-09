@@ -328,8 +328,7 @@ fn load_and_compile(path: &Path) -> Result<compiler::CompiledWorking> {
         build_dir: manifest.paths.build.clone(),
     };
     let mut compiled = compile_events(path, &project_root, &config, working)
-        .map_err(|error| with_source_snippet(path, &source, error))
-        ?;
+        .map_err(|error| with_source_snippet(path, &source, error))?;
     compiled.render_backend = manifest.render.backend;
     compiled.sample_rate = manifest.render.sample_rate;
     compiled.bit_depth = manifest.render.bit_depth;

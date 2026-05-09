@@ -406,7 +406,10 @@ impl<'a> Parser<'a> {
                     self.expect(TokenKind::RParen)?;
                     PatternTransform::VelocityRange(min, max)
                 }
-                _ => bail!("{}: unsupported pattern transform `{name}`", self.previous_span()),
+                _ => bail!(
+                    "{}: unsupported pattern transform `{name}`",
+                    self.previous_span()
+                ),
             };
             self.expect(TokenKind::RParen)?;
             transforms.push(transform);
@@ -490,7 +493,10 @@ impl<'a> Parser<'a> {
             self.advance();
             let seconds = self.expect_number()?;
             if first.fract() != 0.0 || seconds.fract() != 0.0 || seconds >= 60.0 {
-                bail!("{}: expected time placement as minutes:seconds", self.previous_span());
+                bail!(
+                    "{}: expected time placement as minutes:seconds",
+                    self.previous_span()
+                );
             }
             return Ok(RitePlacement::Seconds(first * 60.0 + seconds));
         }

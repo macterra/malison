@@ -333,15 +333,31 @@ working "Black \"Circuit\"\n" {
                 |token| matches!(token.kind, TokenKind::String(ref value) if value.contains("Black \"Circuit\""))
             )
         );
-        assert!(tokens.iter().any(
-            |token| matches!(token.kind, TokenKind::Ident(ref value) if value == "bass_2")
-        ));
-        assert!(tokens.iter().any(|token| matches!(token.kind, TokenKind::LParen)));
-        assert!(tokens.iter().any(|token| matches!(token.kind, TokenKind::Comma)));
-        assert!(tokens.iter().any(|token| matches!(token.kind, TokenKind::Dot)));
-        assert!(tokens.iter().any(
-            |token| matches!(token.kind, TokenKind::Number(ref value) if value == "-1")
-        ));
+        assert!(
+            tokens.iter().any(
+                |token| matches!(token.kind, TokenKind::Ident(ref value) if value == "bass_2")
+            )
+        );
+        assert!(
+            tokens
+                .iter()
+                .any(|token| matches!(token.kind, TokenKind::LParen))
+        );
+        assert!(
+            tokens
+                .iter()
+                .any(|token| matches!(token.kind, TokenKind::Comma))
+        );
+        assert!(
+            tokens
+                .iter()
+                .any(|token| matches!(token.kind, TokenKind::Dot))
+        );
+        assert!(
+            tokens
+                .iter()
+                .any(|token| matches!(token.kind, TokenKind::Number(ref value) if value == "-1"))
+        );
     }
 
     #[test]
