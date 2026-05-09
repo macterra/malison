@@ -28,7 +28,7 @@ Purpose: make the current `.rite -> IR -> WAV` path boringly reliable before add
 ### Remaining Work
 
 * Add CLI integration tests for `check`, `events`, `render --backend rust`, and `render --backend supercollider --dry-run`. Done.
-* Add JSON snapshot tests for `events`.
+* Add JSON snapshot tests for `events`. Done.
 * Add SuperCollider script snapshot tests.
 * Add `cargo run -- scry` placeholder or remove `scry` from the advertised initial CLI until implemented.
 * Make error messages include file paths consistently, not only line/column spans.
@@ -427,7 +427,7 @@ Purpose: package Malison as a real tool.
 These are the most useful next tasks, in suggested order:
 
 1. Add CLI integration tests with `assert_cmd`. Done.
-2. Add event JSON snapshot tests with `insta`.
+2. Add event JSON snapshot tests with `insta`. Done.
 3. Implement `malison ir`.
 4. Implement `malison scry` as a text event summary.
 5. Add rhythm accents with `X` and ghost notes with `g`.

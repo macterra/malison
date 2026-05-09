@@ -33,12 +33,14 @@ fn events_outputs_deterministic_json() {
         .stdout
         .clone();
 
-    let json: serde_json::Value = serde_json::from_slice(&output).unwrap();
+    let mut json: serde_json::Value = serde_json::from_slice(&output).unwrap();
+    normalize_source_files(&mut json);
     assert_eq!(json["language"], "0.1");
     assert_eq!(json["working"], "CLI Test");
     assert_eq!(json["events"].as_array().unwrap().len(), 8);
     assert_eq!(json["events"][0]["kind"], "trigger");
     assert_eq!(json["events"][1]["kind"], "note");
+    insta::assert_json_snapshot!("events_cli_test", json);
 }
 
 #[test]
@@ -157,4 +159,29 @@ fn write_test_kick(path: &Path) {
             .unwrap();
     }
     writer.finalize().unwrap();
+}
+
+fn normalize_source_files(value: &mut serde_json::Value) {
+    match value {
+        serde_json::Value::Object(object) => {
+            if let Some(source) = object.get_mut("source")
+                && let Some(source_object) = source.as_object_mut()
+                && source_object.contains_key("file")
+            {
+                source_object.insert(
+                    "file".to_string(),
+                    serde_json::Value::String("<fixture>/main.rite".to_string()),
+                );
+            }
+            for child in object.values_mut() {
+                normalize_source_files(child);
+            }
+        }
+        serde_json::Value::Array(values) => {
+            for child in values {
+                normalize_source_files(child);
+            }
+        }
+        _ => {}
+    }
 }
