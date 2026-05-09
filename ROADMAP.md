@@ -96,9 +96,9 @@ Purpose: make IR a durable contract between the frontend, renderers, tests, and 
   * `gain_db`
   * `cutoff_hz`
 * Add declaration source spans for daemons, spells, rites, and render targets.
-* Add semantic paths for events:
+* Add semantic paths for events. Done:
   * `working:First Working/rite:main/invoke:0/step:12`
-* Derive event IDs from semantic paths rather than current formatting alone.
+* Derive event IDs from semantic paths rather than current formatting alone. Done.
 
 ### Determinism
 

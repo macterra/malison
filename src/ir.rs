@@ -43,6 +43,7 @@ pub struct IrRite {
 #[derive(Clone, Debug, Serialize)]
 pub struct IrEvent {
     pub id: String,
+    pub semantic_path: String,
     pub kind: String,
     pub time_beats: f64,
     pub duration_beats: f64,

@@ -140,12 +140,11 @@ pub fn compile_events(
                     }
                 }
                 None => {
+                    let (id, semantic_path) =
+                        event_identity(&rite.name, invoke.source_order, "once");
                     events.push(IrEvent {
-                        id: format!(
-                            "evt_{}_{}_once",
-                            sanitize_id(&rite.name),
-                            invoke.source_order
-                        ),
+                        id,
+                        semantic_path,
                         kind: match daemon.kind {
                             DaemonKind::Sample => "trigger".to_string(),
                             DaemonKind::SawSub => "note".to_string(),
@@ -235,13 +234,11 @@ fn expand_rhythm(
             break;
         }
         if steps[absolute_step % steps.len()] {
+            let (id, semantic_path) =
+                event_identity(rite_name, invoke.source_order, &absolute_step.to_string());
             events.push(IrEvent {
-                id: format!(
-                    "evt_{}_{}_{}",
-                    sanitize_id(rite_name),
-                    invoke.source_order,
-                    absolute_step
-                ),
+                id,
+                semantic_path,
                 kind: "trigger".to_string(),
                 time_beats: rite_start + time,
                 duration_beats: step_duration,
@@ -275,13 +272,11 @@ fn expand_notes(
             break;
         }
         if let Some(pitch_name) = &steps[absolute_step % steps.len()] {
+            let (id, semantic_path) =
+                event_identity(rite_name, invoke.source_order, &absolute_step.to_string());
             events.push(IrEvent {
-                id: format!(
-                    "evt_{}_{}_{}",
-                    sanitize_id(rite_name),
-                    invoke.source_order,
-                    absolute_step
-                ),
+                id,
+                semantic_path,
                 kind: "note".to_string(),
                 time_beats: rite_start + time,
                 duration_beats: step_duration,
@@ -530,11 +525,19 @@ fn source_for(input: &Path, invoke: &crate::parser::Invoke) -> IrSource {
     }
 }
 
-fn sanitize_id(value: &str) -> String {
-    value
-        .chars()
-        .map(|ch| if ch.is_ascii_alphanumeric() { ch } else { '_' })
-        .collect()
+fn event_identity(rite: &str, invoke_order: usize, step: &str) -> (String, String) {
+    let semantic_path = format!("rite:{rite}/invoke:{invoke_order}/step:{step}");
+    let id = format!("evt_{:016x}", stable_hash(&semantic_path));
+    (id, semantic_path)
+}
+
+fn stable_hash(value: &str) -> u64 {
+    let mut hash = 0xcbf29ce484222325_u64;
+    for byte in value.as_bytes() {
+        hash ^= *byte as u64;
+        hash = hash.wrapping_mul(0x100000001b3);
+    }
+    hash
 }
 
 #[cfg(test)]

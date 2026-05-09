@@ -27,11 +27,12 @@ expression: json
     {
       "daemon": "kick",
       "duration_beats": 0.25,
-      "id": "evt_main_0_0",
+      "id": "evt_bb5d32adc4429162",
       "kind": "trigger",
       "params": {
         "gain_db": -3.0
       },
+      "semantic_path": "rite:main/invoke:0/step:0",
       "source": {
         "column": 5,
         "file": "<fixture>/main.rite",
@@ -42,7 +43,7 @@ expression: json
     {
       "daemon": "bass",
       "duration_beats": 0.5,
-      "id": "evt_main_1_0",
+      "id": "evt_6709128dd4b54dc3",
       "kind": "note",
       "params": {
         "cutoff_hz": 300.0,
@@ -52,6 +53,7 @@ expression: json
         "midi": 29,
         "name": "F1"
       },
+      "semantic_path": "rite:main/invoke:1/step:0",
       "source": {
         "column": 5,
         "file": "<fixture>/main.rite",
@@ -62,11 +64,12 @@ expression: json
     {
       "daemon": "kick",
       "duration_beats": 0.25,
-      "id": "evt_main_0_4",
+      "id": "evt_bb5d2eadc4428a96",
       "kind": "trigger",
       "params": {
         "gain_db": -3.0
       },
+      "semantic_path": "rite:main/invoke:0/step:4",
       "source": {
         "column": 5,
         "file": "<fixture>/main.rite",
@@ -77,7 +80,7 @@ expression: json
     {
       "daemon": "bass",
       "duration_beats": 0.5,
-      "id": "evt_main_1_2",
+      "id": "evt_6709148dd4b55129",
       "kind": "note",
       "params": {
         "cutoff_hz": 300.0,
@@ -87,6 +90,7 @@ expression: json
         "midi": 29,
         "name": "F1"
       },
+      "semantic_path": "rite:main/invoke:1/step:2",
       "source": {
         "column": 5,
         "file": "<fixture>/main.rite",
@@ -97,11 +101,12 @@ expression: json
     {
       "daemon": "kick",
       "duration_beats": 0.25,
-      "id": "evt_main_0_8",
+      "id": "evt_bb5d3aadc4429efa",
       "kind": "trigger",
       "params": {
         "gain_db": -3.0
       },
+      "semantic_path": "rite:main/invoke:0/step:8",
       "source": {
         "column": 5,
         "file": "<fixture>/main.rite",
@@ -112,7 +117,7 @@ expression: json
     {
       "daemon": "bass",
       "duration_beats": 0.5,
-      "id": "evt_main_1_4",
+      "id": "evt_6709168dd4b5548f",
       "kind": "note",
       "params": {
         "cutoff_hz": 300.0,
@@ -122,6 +127,7 @@ expression: json
         "midi": 29,
         "name": "F1"
       },
+      "semantic_path": "rite:main/invoke:1/step:4",
       "source": {
         "column": 5,
         "file": "<fixture>/main.rite",
@@ -132,11 +138,12 @@ expression: json
     {
       "daemon": "kick",
       "duration_beats": 0.25,
-      "id": "evt_main_0_12",
+      "id": "evt_a1f1f7447d200b45",
       "kind": "trigger",
       "params": {
         "gain_db": -3.0
       },
+      "semantic_path": "rite:main/invoke:0/step:12",
       "source": {
         "column": 5,
         "file": "<fixture>/main.rite",
@@ -147,7 +154,7 @@ expression: json
     {
       "daemon": "bass",
       "duration_beats": 0.5,
-      "id": "evt_main_1_6",
+      "id": "evt_6709188dd4b557f5",
       "kind": "note",
       "params": {
         "cutoff_hz": 300.0,
@@ -157,6 +164,7 @@ expression: json
         "midi": 29,
         "name": "F1"
       },
+      "semantic_path": "rite:main/invoke:1/step:6",
       "source": {
         "column": 5,
         "file": "<fixture>/main.rite",
