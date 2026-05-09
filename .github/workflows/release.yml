@@ -1,0 +1,50 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            archive: tar.gz
+          - os: macos-latest
+            target: x86_64-apple-darwin
+            archive: tar.gz
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            archive: zip
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - run: cargo build --release --locked --target ${{ matrix.target }}
+      - name: Package Unix
+        if: matrix.archive == 'tar.gz'
+        run: |
+          mkdir dist
+          cp target/${{ matrix.target }}/release/malison dist/
+          cp README.md CHANGELOG.md dist/
+          tar -czf malison-${{ github.ref_name }}-${{ matrix.target }}.tar.gz -C dist .
+      - name: Package Windows
+        if: matrix.archive == 'zip'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Path dist
+          Copy-Item target/${{ matrix.target }}/release/malison.exe dist/
+          Copy-Item README.md,CHANGELOG.md dist/
+          Compress-Archive -Path dist/* -DestinationPath malison-${{ github.ref_name }}-${{ matrix.target }}.zip
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: malison-${{ github.ref_name }}-${{ matrix.target }}.${{ matrix.archive }}

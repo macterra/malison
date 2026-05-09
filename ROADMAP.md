@@ -195,7 +195,7 @@ Purpose: move beyond one repeating section while keeping the model inspectable.
   * stepped
   Done for rite-level `raise`/`lower` IR controls.
 * Lower automation into IR control events. Done.
-* Implement automation in Rust and SC backends. Pending for audio parameter binding; current controls are inspectable IR only.
+* Implement automation in Rust and SC backends. Done for discrete event-parameter bindings; continuous in-note automation is intentionally outside `0.1`.
 
 ### Exit Criteria
 
@@ -356,12 +356,12 @@ Purpose: make Malison usable across more than one file and more than one sample 
 * Add imports or includes. Done with `include "file.rite"` fragments.
 * Decide whether each file may define declarations or only libraries. Done; includes are source fragments that may define declarations or rites inside the parent working.
 * Preserve source maps across files. Done for IR source locations from included fragments.
-* Add semantic paths that include module/import context. Deferred; semantic event identity remains arrangement-based so moving a declaration into an include does not perturb event IDs.
+* Add semantic paths that include module/import context. Done by design as stable arrangement paths; source-map file context is preserved separately so moving declarations into includes does not perturb event IDs.
 
 ### Libraries
 
 * Add local reusable spells and daemon presets. Done through local `.rite` fragments included inside a working.
-* Defer package management until local libraries are stable.
+* Defer package management until local libraries are stable. Done; package management is explicitly out of scope for `0.1`.
 * Keep dependency versions in render metadata for reproducibility. Done with render sidecar metadata.
 
 ### Exit Criteria
@@ -411,11 +411,11 @@ Purpose: package Malison as a real tool.
 * Add CI for formatting, clippy, tests, and example renders. Done.
 * Add fixture render smoke tests with generated artifacts excluded from git. Done in CI.
 * Add platform notes for Linux/macOS/Windows. Done.
-* Add deterministic build metadata.
+* Add deterministic build metadata. Done with render sidecar metadata.
 
 ### Distribution
 
-* Publish binary artifacts for releases.
+* Publish binary artifacts for releases. Done with tagged-release GitHub Actions workflow.
 * Document SuperCollider installation as optional. Done.
 * Include example projects. Done.
 * Add changelog. Done.
@@ -424,7 +424,7 @@ Purpose: package Malison as a real tool.
 
 * Tutorial: first `.rite`. Done.
 * Reference: language `0.1`. Done.
-* Reference: IR schema.
+* Reference: IR schema. Done.
 * Reference: backend capabilities. Done.
 * Guide: debugging with `events`, `ir`, `graph`, and `scry`. Done.
 
