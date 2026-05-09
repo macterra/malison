@@ -239,9 +239,24 @@ fn rejects_out_of_range_pan() {
         .arg(fixture.main_rite())
         .assert()
         .failure()
+        .stderr(predicate::str::contains("error[E030]"))
         .stderr(predicate::str::contains(
             "parameter `pan` must be in [-1, 1]",
         ));
+}
+
+#[test]
+fn parse_errors_use_parse_diagnostic_code() {
+    let fixture = Fixture::new_with_source(&RITE.replace("rite main bars 1", "rite invoke bars 1"));
+
+    Command::cargo_bin("malison")
+        .unwrap()
+        .arg("check")
+        .arg(fixture.main_rite())
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("error[E001]"))
+        .stderr(predicate::str::contains("reserved word `invoke`"));
 }
 
 #[test]

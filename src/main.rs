@@ -71,8 +71,19 @@ fn diagnostic_code(error: &anyhow::Error) -> &'static str {
     } else if message.contains("unsupported")
         || message.contains("expected")
         || message.contains("unexpected")
+        || message.contains("unterminated")
+        || message.contains("reserved word")
     {
         "E001"
+    } else if message.contains("backend") || message.contains("SuperCollider") {
+        "E080"
+    } else if message.contains("parameter")
+        || message.contains("tempo")
+        || message.contains("meter")
+        || message.contains("must")
+        || message.contains("duplicate")
+    {
+        "E030"
     } else if message.contains("output") || message.contains("failed to read") {
         "E070"
     } else {

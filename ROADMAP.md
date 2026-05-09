@@ -47,8 +47,8 @@ Purpose: turn the current hand-rolled parser into a reliable compiler frontend w
 
 ### Lexer And Parser
 
-* Decide whether to keep the hand-rolled parser or move to `logos` plus `chumsky`/`lalrpop`.
-* Formalize token tests for comments, strings, escapes, fractions, pitches, identifiers, and reserved words. In progress; comments, strings, numbers, pitches, and block-comment errors are covered.
+* Decide whether to keep the hand-rolled parser or move to `logos` plus `chumsky`/`lalrpop`. Done; keep the hand-rolled parser through `0.1` while the grammar is small.
+* Formalize token tests for comments, strings, escapes, fractions, pitches, identifiers, and reserved words. Done for the current token set; fractions are parser-level duration syntax.
 * Reject all reserved future syntax with clear diagnostics. In progress; reserved rite-body syntax and reserved declaration names are rejected.
 * Improve recovery so one bad declaration does not hide every later error.
 * Parse quoted rite names in all places the spec allows. Done for rite declarations.
@@ -56,9 +56,9 @@ Purpose: turn the current hand-rolled parser into a reliable compiler frontend w
 
 ### Diagnostics
 
-* Introduce diagnostic codes such as `E021` unresolved daemon and `E044` routing cycle. In progress; unresolved daemon and spell errors emit `E021`.
+* Introduce diagnostic codes such as `E021` unresolved daemon and `E044` routing cycle. In progress; parse, validation, filesystem, backend, and unresolved-name errors emit category codes.
 * Print source snippets with caret labels. Done for span-based parse and semantic errors.
-* Distinguish parse errors, semantic errors, backend errors, and filesystem errors.
+* Distinguish parse errors, semantic errors, backend errors, and filesystem errors. Done at diagnostic-code category level.
 * Add suggestions for nearby names: `basss` -> `bass`. Done for unresolved daemons and spells.
 * Ensure `events` writes no non-JSON text to stdout on success. Done.
 

@@ -297,6 +297,9 @@ language 0.1
 /* block comment */
 working "Black \"Circuit\"\n" {
   meter 4/4
+  every 1/16
+  daemon bass_2 = saw_sub
+  spell hats = euclid(3, 8).rotate(-1)
   root F1
   spell bassline = notes "F1 - Gb1"
 }
@@ -318,11 +321,26 @@ working "Black \"Circuit\"\n" {
                 |token| matches!(token.kind, TokenKind::String(ref value) if value.contains("Black \"Circuit\""))
             )
         );
+        assert!(tokens.iter().any(
+            |token| matches!(token.kind, TokenKind::Ident(ref value) if value == "bass_2")
+        ));
+        assert!(tokens.iter().any(|token| matches!(token.kind, TokenKind::LParen)));
+        assert!(tokens.iter().any(|token| matches!(token.kind, TokenKind::Comma)));
+        assert!(tokens.iter().any(|token| matches!(token.kind, TokenKind::Dot)));
+        assert!(tokens.iter().any(
+            |token| matches!(token.kind, TokenKind::Number(ref value) if value == "-1")
+        ));
     }
 
     #[test]
     fn rejects_unterminated_block_comment() {
         let error = lex("language 0.1 /* nope").unwrap_err().to_string();
         assert!(error.contains("unterminated block comment"));
+    }
+
+    #[test]
+    fn rejects_bad_string_escapes() {
+        let error = lex(r#"working "bad \r escape""#).unwrap_err().to_string();
+        assert!(error.contains("unsupported escape sequence"));
     }
 }
