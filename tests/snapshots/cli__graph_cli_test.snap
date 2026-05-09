@@ -31,6 +31,11 @@ expression: json
       "to": "rite:main"
     },
     {
+      "from": "working:CLI Test",
+      "kind": "evokes",
+      "to": "render_target:wav"
+    },
+    {
       "from": "daemon:kick",
       "kind": "renders",
       "to": "event:evt_bb5d32adc4429162"
@@ -142,6 +147,11 @@ expression: json
       "id": "rite:main",
       "kind": "rite",
       "label": "main"
+    },
+    {
+      "id": "render_target:wav",
+      "kind": "render_target",
+      "label": "renders/cli-test.wav"
     },
     {
       "id": "event:evt_bb5d32adc4429162",

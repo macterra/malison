@@ -14,6 +14,7 @@ pub struct Working {
     pub spells: Vec<Spell>,
     pub rites: Vec<Rite>,
     pub evoke_wav: String,
+    pub evoke_span: Span,
 }
 
 #[derive(Clone, Debug)]
@@ -124,6 +125,7 @@ impl<'a> Parser<'a> {
         let mut spells = Vec::new();
         let mut rites = Vec::new();
         let mut evoke_wav = None;
+        let mut evoke_span = None;
 
         while !self.check(TokenKind::RBrace) {
             let keyword = self.expect_ident_any()?;
@@ -152,6 +154,7 @@ impl<'a> Parser<'a> {
                 "rite" => rites.push(self.parse_rite()?),
                 "evoke" => {
                     reject_duplicate("evoke wav", &evoke_wav)?;
+                    evoke_span = Some(self.previous_span());
                     self.expect_ident("wav")?;
                     evoke_wav = Some(self.expect_string()?);
                 }
@@ -179,6 +182,7 @@ impl<'a> Parser<'a> {
             spells,
             rites,
             evoke_wav: evoke_wav.ok_or_else(|| anyhow::anyhow!("missing `evoke wav`"))?,
+            evoke_span: evoke_span.ok_or_else(|| anyhow::anyhow!("missing `evoke wav`"))?,
         })
     }
 

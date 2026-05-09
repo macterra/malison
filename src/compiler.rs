@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
 
-use crate::ir::{Ir, IrDaemon, IrEvent, IrPitch, IrRite, IrSource, IrSpell};
+use crate::ir::{Ir, IrDaemon, IrEvent, IrPitch, IrRenderTarget, IrRite, IrSource, IrSpell};
 use crate::parser::{DaemonKind, PatternKind, Value, Working};
 
 #[derive(Clone, Debug)]
@@ -173,6 +173,7 @@ pub fn compile_events(
             .then(a.id.cmp(&b.id))
     });
 
+    let evoke_wav = working.evoke_wav;
     let ir = Ir {
         ir_version: "0.1".to_string(),
         language: "0.1".to_string(),
@@ -209,11 +210,17 @@ pub fn compile_events(
             })
             .collect(),
         rites,
+        render_targets: vec![IrRenderTarget {
+            id: "wav".to_string(),
+            kind: "wav".to_string(),
+            path: evoke_wav.clone(),
+            source: source_for_span(input, working.evoke_span),
+        }],
         events,
     };
 
     Ok(CompiledWorking {
-        evoke_wav: PathBuf::from(working.evoke_wav),
+        evoke_wav: PathBuf::from(evoke_wav),
         project_root: project_root.to_path_buf(),
         ir,
     })

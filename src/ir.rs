@@ -14,6 +14,7 @@ pub struct Ir {
     pub daemons: Vec<IrDaemon>,
     pub spells: Vec<IrSpell>,
     pub rites: Vec<IrRite>,
+    pub render_targets: Vec<IrRenderTarget>,
     pub events: Vec<IrEvent>,
 }
 
@@ -40,6 +41,14 @@ pub struct IrRite {
     pub id: String,
     pub start_beats: f64,
     pub duration_beats: f64,
+    pub source: IrSource,
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub struct IrRenderTarget {
+    pub id: String,
+    pub kind: String,
+    pub path: String,
     pub source: IrSource,
 }
 
@@ -144,6 +153,20 @@ impl Ir {
                 from: working_id.clone(),
                 to: id,
                 kind: "contains".to_string(),
+            });
+        }
+
+        for target in &self.render_targets {
+            let id = format!("render_target:{}", target.id);
+            nodes.push(IrGraphNode {
+                id: id.clone(),
+                kind: "render_target".to_string(),
+                label: target.path.clone(),
+            });
+            edges.push(IrGraphEdge {
+                from: working_id.clone(),
+                to: id,
+                kind: "evokes".to_string(),
             });
         }
 
