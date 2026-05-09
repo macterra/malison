@@ -126,7 +126,7 @@ pub fn supercollider_script(
     }
 
     let mut score_lines = Vec::new();
-    score_lines.push("[0.0, [\\d_recv, SynthDef(\\mal_sample, { |out=0, bufnum=0, amp=1, pan=0, rate=1| var sig; sig = PlayBuf.ar(1, bufnum, BufRateScale.kr(bufnum) * rate, doneAction:2); Out.ar(out, Pan2.ar(sig * amp, pan)); }).asBytes]]".to_string());
+    score_lines.push("[0.0, [\\d_recv, SynthDef(\\mal_sample, { |out=0, bufnum=0, amp=1, pan=0, rate=1, start=0, dur=999| var sig, env; env = Line.kr(1, 1, dur, doneAction:2); sig = PlayBuf.ar(1, bufnum, BufRateScale.kr(bufnum) * rate, startPos:start); Out.ar(out, Pan2.ar(sig * env * amp, pan)); }).asBytes]]".to_string());
     score_lines.push("[0.0, [\\d_recv, SynthDef(\\mal_saw_sub, { |out=0, freq=55, dur=0.25, amp=0.3, pan=0, cutoff=1200, drive=0| var hold, env, sig, driven; hold = (dur - 0.19).max(0.001); env = EnvGen.kr(Env([0, 1, 0.65, 0.65, 0], [0.01, 0.18, hold, 0.08]), doneAction:2); sig = (Saw.ar(freq) * 0.72) + (Saw.ar(freq * 0.5) * 0.28); sig = RLPF.ar(sig, cutoff.clip(20, 20000), 0.35); driven = (sig * (1 + (drive * 12))).tanh; Out.ar(out, Pan2.ar(driven * env * amp, pan)); }).asBytes]]".to_string());
     score_lines.push("[0.0, [\\d_recv, SynthDef(\\mal_drone, { |out=0, freq=43.65, dur=4, amp=0.18, pan=0, cutoff=900, drive=0| var env, sig, driven; env = EnvGen.kr(Env([0, 1, 1, 0], [0.5, (dur - 1).max(0.1), 0.5]), doneAction:2); sig = (SinOsc.ar(freq) * 0.55) + (Saw.ar(freq * 0.5) * 0.25) + (SinOsc.ar(freq * 1.5) * 0.2); sig = RLPF.ar(sig, cutoff.clip(20, 20000), 0.2); driven = (sig * (1 + (drive * 8))).tanh; Out.ar(out, Pan2.ar(driven * env * amp, pan)); }).asBytes]]".to_string());
 
@@ -161,8 +161,18 @@ pub fn supercollider_script(
                 let tune = param_f64(&event.params, "tune_semitones").unwrap_or(0.0);
                 let rate = 2.0_f64.powf(tune / 12.0);
                 let bufnum = sample_buffers[event.daemon.as_str()];
+                let sample_path = daemon.sample.as_deref().ok_or_else(|| {
+                    anyhow::anyhow!("sample daemon `{}` has no sample path", daemon.id)
+                })?;
+                let sample_info = wav_info(&compiled.project_root.join(sample_path))?;
+                let start_seconds = param_f64(&event.params, "start_seconds").unwrap_or(0.0);
+                let end_seconds = param_f64(&event.params, "end_seconds")
+                    .unwrap_or(sample_info.frames as f64 / sample_info.sample_rate as f64);
+                let start_frame = (start_seconds * sample_info.sample_rate as f64).round();
+                let dur = ((end_seconds - start_seconds).max(0.0) / rate.abs().max(0.001))
+                    .min(sample_info.frames as f64 / sample_info.sample_rate as f64);
                 score_lines.push(format!(
-                    "[{time:.6}, [\\s_new, \\mal_sample, {node_id}, 0, 1, \\bufnum, {bufnum}, \\amp, {amp:.8}, \\pan, {pan:.8}, \\rate, {rate:.8}]]"
+                    "[{time:.6}, [\\s_new, \\mal_sample, {node_id}, 0, 1, \\bufnum, {bufnum}, \\amp, {amp:.8}, \\pan, {pan:.8}, \\rate, {rate:.8}, \\start, {start_frame:.0}, \\dur, {dur:.8}]]"
                 ));
                 node_id += 1;
             }
@@ -250,6 +260,7 @@ fn render_sample(
         .ok_or_else(|| anyhow::anyhow!("sample daemon `{}` has no sample path", daemon.id))?;
     let path = compiled.project_root.join(sample_path);
     let sample = read_wav(&path, sample_rate)?;
+    let sample = slice_sample(&sample, event, sample_rate);
     let start = seconds_to_frame(
         beats_to_seconds(event.time_beats, compiled.ir.tempo_bpm),
         sample_rate,
@@ -259,6 +270,19 @@ fn render_sample(
     let pan = param_f64(&event.params, "pan").unwrap_or(0.0) as f32;
     mix_frames(buffer, start, &sample, gain, pan);
     Ok(())
+}
+
+fn slice_sample(sample: &[[f32; 2]], event: &IrEvent, sample_rate: u32) -> Vec<[f32; 2]> {
+    let start = param_f64(&event.params, "start_seconds")
+        .map(|seconds| seconds_to_frame(seconds.max(0.0), sample_rate))
+        .unwrap_or(0)
+        .min(sample.len());
+    let end = param_f64(&event.params, "end_seconds")
+        .map(|seconds| seconds_to_frame(seconds.max(0.0), sample_rate))
+        .unwrap_or(sample.len())
+        .min(sample.len())
+        .max(start);
+    sample[start..end].to_vec()
 }
 
 fn render_saw_sub(event: &IrEvent, tempo_bpm: &f64, sample_rate: u32, buffer: &mut [[f32; 2]]) {
@@ -387,6 +411,21 @@ fn read_wav(path: &Path, expected_sample_rate: u32) -> Result<Vec<[f32; 2]>> {
         frames.push([left, right]);
     }
     Ok(frames)
+}
+
+struct WavInfo {
+    sample_rate: u32,
+    frames: u32,
+}
+
+fn wav_info(path: &Path) -> Result<WavInfo> {
+    let reader = hound::WavReader::open(path)
+        .with_context(|| format!("failed to open `{}`", path.display()))?;
+    let spec = reader.spec();
+    Ok(WavInfo {
+        sample_rate: spec.sample_rate,
+        frames: reader.duration() / spec.channels as u32,
+    })
 }
 
 fn write_wav(path: &Path, sample_rate: u32, bit_depth: u16, buffer: &[[f32; 2]]) -> Result<()> {
@@ -629,6 +668,57 @@ working "SC Test" {
         fs::remove_dir_all(&root).unwrap();
     }
 
+    #[test]
+    fn renders_stereo_sample_offsets() {
+        let root =
+            std::env::temp_dir().join(format!("malison-stereo-sample-test-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        fs::create_dir_all(root.join("samples")).unwrap();
+        fs::write(
+            root.join("malison.toml"),
+            "[project]\nname = \"stereo-test\"\n",
+        )
+        .unwrap();
+        write_stereo_test_wav(&root.join("samples/stereo.wav"));
+
+        let source = r#"
+language 0.1
+
+working "Stereo Sample Test" {
+  tempo 120
+  meter 4/4
+  seed "seed"
+
+  daemon hit = sample "samples/stereo.wav" { start 0.01 end 0.03 }
+  spell hits = pattern "x---"
+
+  rite main bars 1 {
+    invoke hit with hits every 1/16
+  }
+
+  evoke wav "renders/test.wav"
+}
+"#;
+        let path = root.join("main.rite");
+        fs::write(&path, source).unwrap();
+        let working = parse_source(&path, source).unwrap();
+        let project_root = project_root_for(&path).unwrap();
+        let compiled = compile_events(&path, &project_root, working).unwrap();
+        let out = root.join("renders/test.wav");
+        render_wav(&compiled, &out, 48_000, 24).unwrap();
+
+        let mut reader = hound::WavReader::open(out).unwrap();
+        assert_eq!(reader.spec().channels, 2);
+        let samples = reader
+            .samples::<i32>()
+            .take(2_000)
+            .collect::<Result<Vec<_>, _>>()
+            .unwrap();
+        assert!(samples.chunks(2).any(|frame| frame[0] != frame[1]));
+
+        fs::remove_dir_all(&root).unwrap();
+    }
+
     fn write_test_kick(path: &Path) {
         let spec = hound::WavSpec {
             channels: 1,
@@ -642,6 +732,24 @@ working "SC Test" {
             let env = (-40.0 * t).exp();
             let sample = (2.0 * PI * 90.0 * t).sin() * env;
             writer.write_sample(float_to_i16(sample)).unwrap();
+        }
+        writer.finalize().unwrap();
+    }
+
+    fn write_stereo_test_wav(path: &Path) {
+        let spec = hound::WavSpec {
+            channels: 2,
+            sample_rate: 48_000,
+            bits_per_sample: 16,
+            sample_format: hound::SampleFormat::Int,
+        };
+        let mut writer = hound::WavWriter::create(path, spec).unwrap();
+        for index in 0..4800 {
+            let t = index as f32 / 48_000.0;
+            let left = (2.0 * PI * 220.0 * t).sin() * 0.6;
+            let right = (2.0 * PI * 330.0 * t).sin() * 0.3;
+            writer.write_sample(float_to_i16(left)).unwrap();
+            writer.write_sample(float_to_i16(right)).unwrap();
         }
         writer.finalize().unwrap();
     }

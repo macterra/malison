@@ -208,10 +208,10 @@ Purpose: make the sonic palette worth composing with.
 
 ### Samples
 
-* Support stereo sample playback.
-* Decide on sample-rate conversion strategy.
-* Add better errors for unsupported sample formats.
-* Add sample start/end offsets.
+* Support stereo sample playback. Done in the Rust backend.
+* Decide on sample-rate conversion strategy. Done; version `0.1` rejects sample-rate mismatches instead of resampling.
+* Add better errors for unsupported sample formats. Done through explicit WAV validation and contextual reader errors.
+* Add sample start/end offsets. Done for Rust and represented in SC score generation.
 * Add sample amplitude normalization only if explicitly requested.
 * Add sample kits after individual sample playback is solid.
 

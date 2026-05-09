@@ -849,7 +849,7 @@ fn validate_params(owner: &str, kind: DaemonKind, params: &[crate::parser::Param
         let allowed = match kind {
             DaemonKind::Sample => matches!(
                 param.name.as_str(),
-                "gain" | "pan" | "tune" | "highpass" | "lowpass"
+                "gain" | "pan" | "tune" | "highpass" | "lowpass" | "start" | "end"
             ),
             DaemonKind::SawSub => {
                 matches!(param.name.as_str(), "gain" | "pan" | "cutoff" | "drive")
@@ -887,6 +887,9 @@ fn validate_param_value(owner: &str, name: &str, value: &Value) -> Result<()> {
         "cutoff" | "highpass" | "lowpass" if number <= 0.0 => {
             bail!("`{owner}` parameter `{name}` must be positive");
         }
+        "start" | "end" if number < 0.0 => {
+            bail!("`{owner}` parameter `{name}` must be non-negative");
+        }
         _ => {}
     }
     Ok(())
@@ -922,6 +925,8 @@ fn canonical_param_name(name: &str) -> String {
         "cutoff" => "cutoff_hz",
         "highpass" => "highpass_hz",
         "lowpass" => "lowpass_hz",
+        "start" => "start_seconds",
+        "end" => "end_seconds",
         "tune" => "tune_semitones",
         other => other,
     }
