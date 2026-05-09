@@ -1,0 +1,12 @@
+[project]
+name = "wound-engine"
+
+[render]
+backend = "rust"
+sample_rate = 48000
+bit_depth = 24
+
+[paths]
+samples = "samples"
+renders = "renders"
+build = "build"

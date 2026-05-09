@@ -1,0 +1,60 @@
+language 0.1
+
+working "Shared Samples Demo" {
+  tempo 130
+  meter 4/4
+  seed "library-summoner"
+
+  circle drums -> master {
+    effect saturator amount 0.18
+    effect limiter ceiling -1
+  }
+
+  circle tops -> master {
+    effect highpass cutoff 600
+    effect reverb decay 0.8 wet 0.12
+  }
+
+  daemon kick = sample "808-and-909-Reimagined/Hits/Hog and Ring Mod/TReImag_HogRing_Kick_01.wav" {
+    out drums
+    gain -5
+    normalize on
+  }
+
+  daemon snare = sample "808-and-909-Reimagined/Hits/KDFX/TReImag_KDFX_Snare_03.wav" {
+    out drums
+    gain -10
+    normalize on
+  }
+
+  daemon hats = samplekit "808-and-909-Reimagined/Hits/KDFX" {
+    out tops
+    gain -18
+    start 0
+    end 0.15
+  }
+
+  daemon bass = saw_sub {
+    cutoff 220
+    drive 0.28
+    detune 5
+    sub 0.38
+    gain -13
+  }
+
+  spell kickline = pattern "X--- x--- x-x- x---"
+  spell snareline = pattern "---- x--- ---- x---"
+  spell hatline = pattern "x-xx xx-x x-xx xxxx".humanize(0.012).velocity(rand(0.25, 0.65))
+  spell bassline = notes "F1 - F1 Gb1 Ab1 - F1 Eb1"
+
+  rite main bars 8 {
+    invoke kick with kickline every 1/16
+    invoke snare with snareline every 1/16
+    invoke hats with hatline every 1/16
+    invoke bass with bassline every 1/8
+    raise tension 0.2 -> 0.8
+    bind bass.cutoff to tension 160 -> 900 curve exponential
+  }
+
+  evoke wav "shared-samples-demo.wav"
+}

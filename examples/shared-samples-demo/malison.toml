@@ -1,0 +1,18 @@
+[project]
+name = "shared-samples-demo"
+
+# Sample source:
+# MusicRadar SampleRadar: 167 free processed 808 and 909 samples
+# https://www.musicradar.com/music-tech/samples/sampleradar-167-free-processed-808-and-909-samples
+#
+# Keep the downloaded pack outside git and point sample_libraries at it.
+[render]
+backend = "rust"
+sample_rate = 44100
+bit_depth = 24
+
+[paths]
+samples = "samples"
+sample_libraries = ["../../samples"]
+renders = "renders"
+build = "build"

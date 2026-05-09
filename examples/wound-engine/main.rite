@@ -1,0 +1,78 @@
+language 0.1
+
+working "Wound Engine" {
+  tempo 132
+  meter 4/4
+  seed "black-furnace"
+
+  circle drums -> master {
+    effect saturator amount 0.22
+    effect reverb decay 2.4 wet 0.12
+    effect limiter ceiling -1
+  }
+
+  circle bass -> master {
+    effect saturator amount 0.35
+  }
+
+  daemon kick = sample "kick.wav" {
+    tune -2
+    out drums
+  }
+
+  daemon hats = samplekit "corroded_hats" {
+    out drums
+    gain -14
+    highpass 900
+  }
+
+  daemon bass = saw_sub {
+    out bass
+    detune 8
+    drive 0.45
+    cutoff 240
+    attack 0.01
+    decay 0.18
+    sustain 0.7
+    release 0.08
+    gain -11
+  }
+
+  daemon drone = swarm {
+    out master
+    root F2
+    voices 9
+    spread 31
+    cutoff 900
+    drive 0.28
+    gain -22
+  }
+
+  spell kickline = pattern "x--- x--- x-x- x---"
+  spell hatline = pattern "x-xx xx-x xx-x xx-x".humanize(0.014).velocity(rand(0.35, 0.8))
+  spell bassline = notes "F1 - F1 Gb1 Ab1 - F1 Eb1"
+  spell broken_bassline = notes "F1 - F1 Gb1 Ab1 - F1 Eb1".degrade(0.22)
+
+  rite invocation bars 16 {
+    invoke kick with kickline every 1/16 gain -8 highpass 180
+    invoke drone gain -10
+    raise tension 0.1 -> 0.35
+  }
+
+  rite possession bars 32 {
+    invoke kick with kickline every 1/16
+    invoke hats with hatline every 1/16
+    invoke bass with bassline every 1/8
+    raise tension 0.35 -> 0.9
+    bind bass.cutoff to tension 180 -> 1200 curve exponential
+  }
+
+  rite collapse bars 16 {
+    banish kick
+    invoke drone gain -16 drive 0.45
+    invoke bass with broken_bassline every 1/8
+    lower tension 0.9 -> 0.25
+  }
+
+  evoke wav "wound-engine.wav"
+}
