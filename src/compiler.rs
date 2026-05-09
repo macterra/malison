@@ -83,6 +83,7 @@ pub fn compile_events(
             id: rite.name.clone(),
             start_beats: cursor_beats,
             duration_beats,
+            source: source_for_span(input, rite.span),
         });
 
         for invoke in &rite.invokes {
@@ -191,6 +192,7 @@ pub fn compile_events(
                 },
                 sample: daemon.sample_path.clone(),
                 params: merged_params(&daemon.params, &[]),
+                source: source_for_span(input, daemon.span),
             })
             .collect(),
         spells: working
@@ -203,6 +205,7 @@ pub fn compile_events(
                     PatternKind::Notes => "notes".to_string(),
                 },
                 body: spell.body.clone(),
+                source: source_for_span(input, spell.span),
             })
             .collect(),
         rites,
@@ -523,10 +526,14 @@ fn value_to_json(value: &Value) -> serde_json::Value {
 }
 
 fn source_for(input: &Path, invoke: &crate::parser::Invoke) -> IrSource {
+    source_for_span(input, invoke.span)
+}
+
+fn source_for_span(input: &Path, span: crate::lexer::Span) -> IrSource {
     IrSource {
         file: input.display().to_string(),
-        line: invoke.span.line,
-        column: invoke.span.column,
+        line: span.line,
+        column: span.column,
     }
 }
 

@@ -11,7 +11,12 @@ expression: json
       "params": {
         "gain_db": -3.0
       },
-      "sample": "samples/kick.wav"
+      "sample": "samples/kick.wav",
+      "source": {
+        "column": 3,
+        "file": "<fixture>/main.rite",
+        "line": 9
+      }
     },
     {
       "id": "bass",
@@ -19,6 +24,11 @@ expression: json
       "params": {
         "cutoff_hz": 300.0,
         "drive": 0.3
+      },
+      "source": {
+        "column": 3,
+        "file": "<fixture>/main.rite",
+        "line": 10
       }
     }
   ],
@@ -191,6 +201,11 @@ expression: json
     {
       "duration_beats": 4.0,
       "id": "main",
+      "source": {
+        "column": 3,
+        "file": "<fixture>/main.rite",
+        "line": 15
+      },
       "start_beats": 0.0
     }
   ],
@@ -199,12 +214,22 @@ expression: json
     {
       "body": "x---",
       "id": "kicks",
-      "kind": "pattern"
+      "kind": "pattern",
+      "source": {
+        "column": 3,
+        "file": "<fixture>/main.rite",
+        "line": 12
+      }
     },
     {
       "body": "F1 -",
       "id": "bassline",
-      "kind": "notes"
+      "kind": "notes",
+      "source": {
+        "column": 3,
+        "file": "<fixture>/main.rite",
+        "line": 13
+      }
     }
   ],
   "tempo_bpm": 128.0,

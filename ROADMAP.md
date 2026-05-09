@@ -52,7 +52,7 @@ Purpose: turn the current hand-rolled parser into a reliable compiler frontend w
 * Reject all reserved future syntax with clear diagnostics. In progress; reserved rite-body syntax is rejected.
 * Improve recovery so one bad declaration does not hide every later error.
 * Parse quoted rite names in all places the spec allows. Done for rite declarations.
-* Add source spans to declarations, not only invocations.
+* Add source spans to declarations, not only invocations. Done for daemons, spells, and rites.
 
 ### Diagnostics
 
@@ -95,7 +95,7 @@ Purpose: make IR a durable contract between the frontend, renderers, tests, and 
   * `duration_beats`
   * `gain_db`
   * `cutoff_hz`
-* Add declaration source spans for daemons, spells, rites, and render targets.
+* Add declaration source spans for daemons, spells, rites, and render targets. Done for daemons, spells, and rites; render target spans remain pending.
 * Add semantic paths for events. Done:
   * `working:First Working/rite:main/invoke:0/step:12`
 * Derive event IDs from semantic paths rather than current formatting alone. Done.

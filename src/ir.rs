@@ -24,6 +24,7 @@ pub struct IrDaemon {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub sample: Option<String>,
     pub params: BTreeMap<String, serde_json::Value>,
+    pub source: IrSource,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -31,6 +32,7 @@ pub struct IrSpell {
     pub id: String,
     pub kind: String,
     pub body: String,
+    pub source: IrSource,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -38,6 +40,7 @@ pub struct IrRite {
     pub id: String,
     pub start_beats: f64,
     pub duration_beats: f64,
+    pub source: IrSource,
 }
 
 #[derive(Clone, Debug, Serialize)]

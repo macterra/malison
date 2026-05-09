@@ -22,6 +22,7 @@ pub struct Daemon {
     pub kind: DaemonKind,
     pub sample_path: Option<String>,
     pub params: Vec<Param>,
+    pub span: Span,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -35,6 +36,7 @@ pub struct Spell {
     pub name: String,
     pub kind: PatternKind,
     pub body: String,
+    pub span: Span,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -48,6 +50,7 @@ pub struct Rite {
     pub name: String,
     pub bars: u32,
     pub invokes: Vec<Invoke>,
+    pub span: Span,
 }
 
 #[derive(Clone, Debug)]
@@ -180,6 +183,7 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_daemon(&mut self) -> Result<Daemon> {
+        let span = self.previous_span();
         let name = self.expect_ident_any()?;
         self.expect(TokenKind::Equal)?;
         let kind_name = self.expect_ident_any()?;
@@ -209,10 +213,12 @@ impl<'a> Parser<'a> {
             kind,
             sample_path,
             params,
+            span,
         })
     }
 
     fn parse_spell(&mut self) -> Result<Spell> {
+        let span = self.previous_span();
         let name = self.expect_ident_any()?;
         self.expect(TokenKind::Equal)?;
         let pattern_kind = self.expect_ident_any()?;
@@ -225,10 +231,16 @@ impl<'a> Parser<'a> {
             ),
         };
         let body = self.expect_string()?;
-        Ok(Spell { name, kind, body })
+        Ok(Spell {
+            name,
+            kind,
+            body,
+            span,
+        })
     }
 
     fn parse_rite(&mut self) -> Result<Rite> {
+        let span = self.previous_span();
         let name = match self.peek_kind() {
             Some(TokenKind::Ident(_)) => self.expect_ident_any()?,
             Some(TokenKind::String(_)) => self.expect_string()?,
@@ -247,6 +259,7 @@ impl<'a> Parser<'a> {
             name,
             bars,
             invokes,
+            span,
         })
     }
 
