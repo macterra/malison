@@ -33,6 +33,8 @@ Supported declarations:
 * `rite name at 1:30 bars 4 layer { ... }`
 * `evoke wav "renders/out.wav"`
 
+Inside a `working` block, `include "relative/path.rite"` expands another `.rite` fragment before parsing. Included fragments may contain declarations or rite blocks without their own `language` or `working` wrapper.
+
 Supported rite statements:
 
 * `invoke daemon`

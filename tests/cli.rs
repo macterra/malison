@@ -256,6 +256,54 @@ working "Manifest Test" {
 }
 
 #[test]
+fn check_accepts_included_rite_fragments() {
+    let root = tempfile::tempdir().unwrap();
+    fs::create_dir_all(root.path().join("samples")).unwrap();
+    fs::write(
+        root.path().join("malison.toml"),
+        "[project]\nname = \"include-test\"\n",
+    )
+    .unwrap();
+    write_test_kick(&root.path().join("samples/kick.wav"));
+    fs::write(
+        root.path().join("drums.rite"),
+        r#"
+  daemon kick = sample "samples/kick.wav"
+  spell hits = pattern "x---"
+"#,
+    )
+    .unwrap();
+    fs::write(
+        root.path().join("main.rite"),
+        r#"
+language 0.1
+
+working "Include Test" {
+  tempo 120
+  meter 4/4
+  seed "include"
+
+  include "drums.rite"
+
+  rite main bars 1 {
+    invoke kick with hits every 1/16
+  }
+
+  evoke wav "renders/include.wav"
+}
+"#,
+    )
+    .unwrap();
+
+    Command::cargo_bin("malison")
+        .unwrap()
+        .arg("check")
+        .arg(root.path().join("main.rite"))
+        .assert()
+        .success();
+}
+
+#[test]
 fn fmt_check_rejects_unformatted_source() {
     let fixture = Fixture::new_with_source(&RITE.replace("tempo 128", "tempo    128"));
 

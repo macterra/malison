@@ -6,6 +6,7 @@ mod manifest;
 mod parser;
 mod renderer;
 
+use std::collections::HashSet;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
@@ -374,8 +375,9 @@ fn load_and_compile(path: &Path) -> Result<compiler::CompiledWorking> {
             path.display()
         );
     }
-    let source =
+    let raw_source =
         fs::read_to_string(path).with_context(|| format!("failed to read `{}`", path.display()))?;
+    let source = expand_includes(path, &raw_source, &mut HashSet::new())?;
     let working =
         parse_source(path, &source).map_err(|error| with_source_snippet(path, &source, error))?;
     let project_root = project_root_for(path)?;
@@ -391,6 +393,42 @@ fn load_and_compile(path: &Path) -> Result<compiler::CompiledWorking> {
     compiled.sample_rate = manifest.render.sample_rate;
     compiled.bit_depth = manifest.render.bit_depth;
     Ok(compiled)
+}
+
+fn expand_includes(path: &Path, source: &str, seen: &mut HashSet<PathBuf>) -> Result<String> {
+    let canonical = fs::canonicalize(path)
+        .with_context(|| format!("failed to canonicalize `{}`", path.display()))?;
+    if !seen.insert(canonical.clone()) {
+        anyhow::bail!("include cycle involving `{}`", path.display());
+    }
+    let base = path.parent().unwrap_or_else(|| Path::new("."));
+    let mut expanded = String::new();
+    for line in source.lines() {
+        if let Some(include) = parse_include_line(line) {
+            let include_path = base.join(include);
+            if include_path.extension().and_then(|ext| ext.to_str()) != Some("rite") {
+                anyhow::bail!(
+                    "include `{}` must use the .rite extension",
+                    include_path.display()
+                );
+            }
+            let include_source = fs::read_to_string(&include_path)
+                .with_context(|| format!("failed to read `{}`", include_path.display()))?;
+            expanded.push_str(&expand_includes(&include_path, &include_source, seen)?);
+            expanded.push('\n');
+        } else {
+            expanded.push_str(line);
+            expanded.push('\n');
+        }
+    }
+    seen.remove(&canonical);
+    Ok(expanded)
+}
+
+fn parse_include_line(line: &str) -> Option<&str> {
+    let trimmed = line.trim();
+    let rest = trimmed.strip_prefix("include ")?;
+    rest.strip_prefix('"')?.strip_suffix('"')
 }
 
 fn with_source_snippet(path: &Path, source: &str, error: anyhow::Error) -> anyhow::Error {
