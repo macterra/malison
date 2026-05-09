@@ -200,7 +200,8 @@ fn scry_outputs_human_readable_summary() {
         .stdout(predicate::str::contains("working: CLI Test"))
         .stdout(predicate::str::contains("events: 8"))
         .stdout(predicate::str::contains("rite main"))
-        .stdout(predicate::str::contains("note    bass"));
+        .stdout(predicate::str::contains("note    bass"))
+        .stdout(predicate::str::contains("velocity 1.00"));
 }
 
 #[test]

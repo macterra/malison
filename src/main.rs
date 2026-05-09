@@ -236,13 +236,18 @@ fn print_scry(compiled: &compiler::CompiledWorking) {
         }) {
             if let Some(pitch) = &event.pitch {
                 println!(
-                    "  {:>7.3} {:<7} {:<12} pitch {} ({})",
-                    event.time_beats, event.kind, event.daemon, pitch.name, pitch.midi
+                    "  {:>7.3} {:<7} {:<12} velocity {:>4.2} pitch {} ({})",
+                    event.time_beats,
+                    event.kind,
+                    event.daemon,
+                    event.velocity,
+                    pitch.name,
+                    pitch.midi
                 );
             } else {
                 println!(
-                    "  {:>7.3} {:<7} {}",
-                    event.time_beats, event.kind, event.daemon
+                    "  {:>7.3} {:<7} {:<12} velocity {:>4.2}",
+                    event.time_beats, event.kind, event.daemon, event.velocity
                 );
             }
         }
