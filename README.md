@@ -1,5 +1,9 @@
 # Malison
 
+<p align="center">
+  <img src="sigil.png" alt="Malison sigil" width="480">
+</p>
+
 Executable scores for dark electronic music.
 
 ## Status
