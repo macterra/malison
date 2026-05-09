@@ -67,7 +67,23 @@ pub struct Rite {
     pub placement: Option<RitePlacement>,
     pub layer: bool,
     pub invokes: Vec<Invoke>,
+    pub automations: Vec<Automation>,
     pub span: Span,
+}
+
+#[derive(Clone, Debug)]
+pub struct Automation {
+    pub direction: AutomationDirection,
+    pub target: String,
+    pub from: f64,
+    pub to: f64,
+    pub span: Span,
+}
+
+#[derive(Clone, Debug)]
+pub enum AutomationDirection {
+    Raise,
+    Lower,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -351,9 +367,16 @@ impl<'a> Parser<'a> {
         };
         self.expect(TokenKind::LBrace)?;
         let mut invokes = Vec::new();
+        let mut automations = Vec::new();
         while !self.check(TokenKind::RBrace) {
-            self.expect_ident("invoke")?;
-            invokes.push(self.parse_invoke()?);
+            if self.check_ident("invoke") {
+                self.advance();
+                invokes.push(self.parse_invoke()?);
+            } else if self.check_ident("raise") || self.check_ident("lower") {
+                automations.push(self.parse_automation()?);
+            } else {
+                self.expect_ident("invoke")?;
+            }
         }
         self.expect(TokenKind::RBrace)?;
         Ok(Rite {
@@ -362,6 +385,27 @@ impl<'a> Parser<'a> {
             placement,
             layer,
             invokes,
+            automations,
+            span,
+        })
+    }
+
+    fn parse_automation(&mut self) -> Result<Automation> {
+        let span = self.location();
+        let direction = match self.expect_ident_any()?.as_str() {
+            "raise" => AutomationDirection::Raise,
+            "lower" => AutomationDirection::Lower,
+            _ => unreachable!(),
+        };
+        let target = self.expect_ident_any()?;
+        let from = self.expect_number()?;
+        self.expect(TokenKind::Arrow)?;
+        let to = self.expect_number()?;
+        Ok(Automation {
+            direction,
+            target,
+            from,
+            to,
             span,
         })
     }
@@ -402,7 +446,11 @@ impl<'a> Parser<'a> {
             None
         };
         let mut params = Vec::new();
-        while !self.check(TokenKind::RBrace) && !self.check_ident("invoke") {
+        while !self.check(TokenKind::RBrace)
+            && !self.check_ident("invoke")
+            && !self.check_ident("raise")
+            && !self.check_ident("lower")
+        {
             params.push(self.parse_param()?);
         }
         let source_order = self.invoke_order;
@@ -725,7 +773,7 @@ working "Quoted Rite" {
     }
 
     #[test]
-    fn rejects_reserved_future_syntax_in_rite_body() {
+    fn rejects_unsupported_rite_body_syntax() {
         let source = r#"
 language 0.1
 
@@ -737,7 +785,7 @@ working "Future Syntax" {
   daemon kick = sample "samples/kick.wav"
 
   rite main bars 1 {
-    raise tension 0.1
+    bind bass.cutoff to tension 180 -> 1200
   }
 
   evoke wav "renders/future.wav"
@@ -747,7 +795,7 @@ working "Future Syntax" {
         let error = parse_source(Path::new("fixture.rite"), source)
             .unwrap_err()
             .to_string();
-        assert!(error.contains("expected `invoke`, found `raise`"));
+        assert!(error.contains("expected `invoke`, found `bind`"));
     }
 
     #[test]

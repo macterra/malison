@@ -15,6 +15,7 @@ pub enum TokenKind {
     Comma,
     Dot,
     Colon,
+    Arrow,
     Slash,
     Equal,
 }
@@ -85,6 +86,15 @@ impl Lexer {
                 ',' => self.push_single(TokenKind::Comma),
                 '.' => self.push_single(TokenKind::Dot),
                 ':' => self.push_single(TokenKind::Colon),
+                '-' if self.peek_next() == Some('>') => {
+                    let span = self.span();
+                    self.bump();
+                    self.bump();
+                    self.tokens.push(Token {
+                        kind: TokenKind::Arrow,
+                        span,
+                    });
+                }
                 '/' => self.push_single(TokenKind::Slash),
                 '=' => self.push_single(TokenKind::Equal),
                 '"' => self.lex_string()?,

@@ -25,6 +25,7 @@ The current schema version is `0.1`. Object keys are emitted in stable order, an
   "spells": [],
   "rites": [],
   "render_targets": [],
+  "control_events": [],
   "events": []
 }
 ```
@@ -114,6 +115,30 @@ Render targets represent `evoke` declarations.
     "file": "examples/first-working/main.rite",
     "line": 24,
     "column": 3
+  }
+}
+```
+
+## Events
+
+## Control Events
+
+Rite automation lowers to inspectable control events.
+
+```json
+{
+  "id": "ctrl_5b662d3c387cf894",
+  "semantic_path": "rite:main/control:0",
+  "target": "tension",
+  "curve": "linear",
+  "start_beats": 0.0,
+  "duration_beats": 8.0,
+  "from": 0.2,
+  "to": 0.8,
+  "source": {
+    "file": "examples/first-working/main.rite",
+    "line": 23,
+    "column": 5
   }
 }
 ```

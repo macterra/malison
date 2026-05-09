@@ -16,6 +16,7 @@ pub struct Ir {
     pub spells: Vec<IrSpell>,
     pub rites: Vec<IrRite>,
     pub render_targets: Vec<IrRenderTarget>,
+    pub control_events: Vec<IrControlEvent>,
     pub events: Vec<IrEvent>,
 }
 
@@ -52,6 +53,19 @@ pub struct IrRenderTarget {
     pub id: String,
     pub kind: String,
     pub path: String,
+    pub source: IrSource,
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub struct IrControlEvent {
+    pub id: String,
+    pub semantic_path: String,
+    pub target: String,
+    pub curve: String,
+    pub start_beats: f64,
+    pub duration_beats: f64,
+    pub from: f64,
+    pub to: f64,
     pub source: IrSource,
 }
 
@@ -200,6 +214,25 @@ impl Ir {
                     from: format!("rite:{}", rite.id),
                     to: id,
                     kind: "contains".to_string(),
+                });
+            }
+        }
+
+        for control in &self.control_events {
+            let id = format!("control:{}", control.id);
+            nodes.push(IrGraphNode {
+                id: id.clone(),
+                kind: "control".to_string(),
+                label: control.target.clone(),
+            });
+            if let Some(rite) = self.rites.iter().find(|rite| {
+                control.start_beats >= rite.start_beats
+                    && control.start_beats < rite.start_beats + rite.duration_beats
+            }) {
+                edges.push(IrGraphEdge {
+                    from: format!("rite:{}", rite.id),
+                    to: id,
+                    kind: "automates".to_string(),
                 });
             }
         }

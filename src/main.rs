@@ -235,6 +235,7 @@ fn print_scry(compiled: &compiler::CompiledWorking) {
     println!("daemons: {}", ir.daemons.len());
     println!("spells: {}", ir.spells.len());
     println!("rites: {}", ir.rites.len());
+    println!("control events: {}", ir.control_events.len());
     println!("events: {}", ir.events.len());
     for rite in &ir.rites {
         println!(
@@ -261,6 +262,15 @@ fn print_scry(compiled: &compiler::CompiledWorking) {
                     event.time_beats, event.kind, event.daemon, event.velocity
                 );
             }
+        }
+        for control in ir.control_events.iter().filter(|control| {
+            control.start_beats >= rite.start_beats
+                && control.start_beats < rite.start_beats + rite.duration_beats
+        }) {
+            println!(
+                "  {:>7.3} control {:<12} {:>4.2} -> {:>4.2}",
+                control.start_beats, control.target, control.from, control.to
+            );
         }
     }
 }

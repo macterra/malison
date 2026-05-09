@@ -4,6 +4,7 @@ assertion_line: 43
 expression: json
 ---
 {
+  "control_events": [],
   "daemons": [
     {
       "id": "kick",

@@ -5,9 +5,12 @@ use std::path::{Path, PathBuf};
 use anyhow::{Context, Result, bail};
 
 use crate::ir::{
-    Ir, IrDaemon, IrEvent, IrPitch, IrRandomStream, IrRenderTarget, IrRite, IrSource, IrSpell,
+    Ir, IrControlEvent, IrDaemon, IrEvent, IrPitch, IrRandomStream, IrRenderTarget, IrRite,
+    IrSource, IrSpell,
 };
-use crate::parser::{DaemonKind, PatternKind, PatternTransform, RitePlacement, Value, Working};
+use crate::parser::{
+    AutomationDirection, DaemonKind, PatternKind, PatternTransform, RitePlacement, Value, Working,
+};
 
 #[derive(Clone, Debug)]
 pub struct CompiledWorking {
@@ -73,6 +76,7 @@ pub fn compile_events(
     validate_invokes(&working, &daemon_map, &spell_map)?;
 
     let mut events = Vec::new();
+    let mut control_events = Vec::new();
     let mut rites = Vec::new();
     let mut cursor_beats = 0.0;
     let mut occupied_ranges = Vec::<(String, f64, f64)>::new();
@@ -113,6 +117,26 @@ pub fn compile_events(
             layer: rite.layer,
             source: source_for_span(input, rite.span),
         });
+
+        for (automation_index, automation) in rite.automations.iter().enumerate() {
+            validate_control_target(&automation.target, automation.span)?;
+            let (id, semantic_path) = control_identity(&rite.name, automation_index);
+            let (from, to) = match automation.direction {
+                AutomationDirection::Raise => (automation.from, automation.to),
+                AutomationDirection::Lower => (automation.from, automation.to),
+            };
+            control_events.push(IrControlEvent {
+                id,
+                semantic_path,
+                target: automation.target.clone(),
+                curve: "linear".to_string(),
+                start_beats: rite_start,
+                duration_beats,
+                from,
+                to,
+                source: source_for_span(input, automation.span),
+            });
+        }
 
         for invoke in &rite.invokes {
             if let Some(every) = invoke.every
@@ -259,6 +283,7 @@ pub fn compile_events(
             path: evoke_wav.clone(),
             source: source_for_span(input, working.evoke_span),
         }],
+        control_events,
         events,
     };
 
@@ -346,6 +371,17 @@ fn validate_invokes(
 
 fn ranges_overlap(left_start: f64, left_end: f64, right_start: f64, right_end: f64) -> bool {
     left_start < right_end && right_start < left_end
+}
+
+fn validate_control_target(target: &str, span: crate::lexer::Span) -> Result<()> {
+    if matches!(
+        target,
+        "tension" | "density" | "instability" | "harshness" | "spaciousness" | "degradation"
+    ) {
+        Ok(())
+    } else {
+        bail!("{span}: unsupported control target `{target}`");
+    }
 }
 
 fn expand_rhythm(
@@ -959,6 +995,12 @@ fn event_identity(rite: &str, invoke_order: usize, step: &str) -> (String, Strin
     (id, semantic_path)
 }
 
+fn control_identity(rite: &str, automation_index: usize) -> (String, String) {
+    let semantic_path = format!("rite:{rite}/control:{automation_index}");
+    let id = format!("ctrl_{:016x}", stable_hash(&semantic_path));
+    (id, semantic_path)
+}
+
 fn stable_hash(value: &str) -> u64 {
     let mut hash = 0xcbf29ce484222325_u64;
     for byte in value.as_bytes() {
@@ -1391,6 +1433,44 @@ working "Drone Test" {
         assert_eq!(compiled.ir.events[0].kind, "continuous");
         assert_eq!(compiled.ir.events[0].duration_beats, 8.0);
         assert_eq!(compiled.ir.events[0].pitch.as_ref().unwrap().name, "F1");
+
+        fs::remove_dir_all(&root).unwrap();
+    }
+
+    #[test]
+    fn lowers_rite_automation_to_control_events() {
+        let root =
+            std::env::temp_dir().join(format!("malison-automation-test-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        fs::create_dir_all(root.join("samples")).unwrap();
+        fs::write(root.join("samples/kick.wav"), b"not really wav").unwrap();
+
+        let source = r#"
+language 0.1
+
+working "Automation Test" {
+  tempo 120
+  meter 4/4
+  seed "seed"
+
+  daemon kick = sample "samples/kick.wav"
+  spell hits = pattern "x---"
+
+  rite main bars 2 {
+    invoke kick with hits every 1/16
+    raise tension 0.2 -> 0.8
+  }
+
+  evoke wav "renders/test.wav"
+}
+"#;
+        let path = root.join("main.rite");
+        fs::write(&path, source).unwrap();
+        let working = parse_source(&path, source).unwrap();
+        let compiled = compile_events(&path, &root, working).unwrap();
+        assert_eq!(compiled.ir.control_events.len(), 1);
+        assert_eq!(compiled.ir.control_events[0].target, "tension");
+        assert_eq!(compiled.ir.control_events[0].duration_beats, 8.0);
 
         fs::remove_dir_all(&root).unwrap();
     }

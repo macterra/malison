@@ -193,8 +193,9 @@ Purpose: move beyond one repeating section while keeping the model inspectable.
   * linear
   * exponential
   * stepped
-* Lower automation into IR control events.
-* Implement automation in Rust and SC backends.
+  Linear `raise`/`lower` controls are done; exponential and stepped remain pending.
+* Lower automation into IR control events. Done.
+* Implement automation in Rust and SC backends. Pending for audio parameter binding; current controls are inspectable IR only.
 
 ### Exit Criteria
 
